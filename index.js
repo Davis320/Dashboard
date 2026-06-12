@@ -108,5 +108,3 @@ app.post('/api/data/:dataset', async (req, res) => {
     res.status(500).json({ success:false, error:err.message });
   }
 });
-
-app.listen(PORT, () => console.log(`Dashboard API running on port ${PORT}`));
