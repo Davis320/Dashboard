@@ -12,7 +12,9 @@ app.use(express.json({ limit: '50mb' }));
 // ── Database ──────────────────────────────────────────────────────────────────
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway.internal')
+    ? false
+    : { rejectUnauthorized: false },
 });
 
 (async () => {
@@ -24,7 +26,7 @@ const pool = new Pool({
     )
   `);
   console.log('DB ready');
-})().catch(err => console.error('DB init error:', err.message));
+})().catch(err => console.error('DB init error:', err.message, err.code, err.stack));
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const VALID_DATASETS = ['mapping','od','invreport','compreport','plreport','inbound'];
@@ -107,4 +109,4 @@ app.post('/api/data/:dataset', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`Dashboard API running on port ${PORT}`));    
+app.listen(PORT, () => console.log(`Dashboard API running on port ${PORT}`));
