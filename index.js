@@ -60,9 +60,9 @@ app.get("/api/debug-headers", (req, res) => { res.json({ headers: req.headers })
 app.get("/api/debug-db", async (req, res) => {
   try {
     const r = await pool.query('SELECT NOW() as now');
-    res.json({ success: true, now: r.rows[0].now, database_url_set: !!process.env.DATABASE_URL, using_fallback: !process.env.DATABASE_URL });
+    res.json({ success: true, now: r.rows[0].now });
   } catch(err) {
-    res.json({ success: false, error: String(err), database_url_set: !!process.env.DATABASE_URL, db_url_prefix: DB_URL.slice(0,30) });
+    res.json({ success: false, error: err.message, code: err.code, detail: err.detail, hint: err.hint });
   }
 });
 
