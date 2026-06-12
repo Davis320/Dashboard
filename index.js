@@ -10,10 +10,13 @@ app.options('*', cors());
 app.use(express.json({ limit: '50mb' }));
 
 // ── Database ──────────────────────────────────────────────────────────────────
-const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:uNTumoOKwvZcHLMNcPXJnZGRGGGgfDbV@acela.proxy.rlwy.net:32558/railway';
 const pool = new Pool({
-  connectionString: DB_URL,
-  ssl: false,
+  host: 'acela.proxy.rlwy.net',
+  port: 32558,
+  database: 'railway',
+  user: 'postgres',
+  password: 'uNTumoOKwvZcHLMNcPXJnZGRGGGgfDbV',
+  ssl: { rejectUnauthorized: false },
 });
 
 app.listen(PORT, () => {
