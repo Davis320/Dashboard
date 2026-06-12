@@ -17,18 +17,18 @@ const pool = new Pool({
     : { rejectUnauthorized: false },
 });
 
-(async () => {
-  await pool.query(`
+app.listen(PORT, () => {
+  console.log(`Dashboard API running on port ${PORT}`);
+  // Init DB after server is listening
+  pool.query(`
     CREATE TABLE IF NOT EXISTS dashboard_data (
       dataset    TEXT PRIMARY KEY,
       payload    JSONB        NOT NULL,
       updated_at TIMESTAMPTZ  DEFAULT NOW()
     )
-  `);
-  console.log('DB ready');
-})().catch(err => console.error('DB init error:', err.message, err.code, err.stack));
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
+  `).then(() => console.log('DB ready'))
+    .catch(err => console.error('DB init error:', err.message, err.code));
+});
 const VALID_DATASETS = ['mapping','od','invreport','compreport','plreport','inbound'];
 const FALLBACK_PASSWORD = 'Goodmorning2';
 
