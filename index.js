@@ -12,11 +12,11 @@ app.use(express.json({ limit: '50mb' }));
 // ── Database ──────────────────────────────────────────────────────────────────
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const pool = new Pool({
-  host: 'acela.proxy.rlwy.net',
-  port: 32558,
+  host: 'thomas.proxy.rlwy.net',
+  port: 59087,
   database: 'railway',
   user: 'postgres',
-  password: 'uNTumoOKwvZcHLMNcPXJnZGRGGGgfDbV',
+  password: 'KRiYmNDcTrqeRpWNYSRgCmwPNkqtFxku',
 });
 
 app.listen(PORT, () => {
