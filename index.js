@@ -12,8 +12,8 @@ app.use(express.json({ limit: '50mb' }));
 // ── Database ──────────────────────────────────────────────────────────────────
 const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:uNTumoOKwvZcHLMNcPXJnZGRGGGgfDbV@acela.proxy.rlwy.net:32558/railway';
 const pool = new Pool({
-  connectionString: DB_URL + '?sslmode=require',
-  ssl: { rejectUnauthorized: false },
+  connectionString: DB_URL,
+  ssl: false,
 });
 
 app.listen(PORT, () => {
