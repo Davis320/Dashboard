@@ -10,11 +10,10 @@ app.options('*', cors());
 app.use(express.json({ limit: '50mb' }));
 
 // ── Database ──────────────────────────────────────────────────────────────────
+const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:uNTumoOKwvZcHLMNcPXJnZGRGGGgfDbV@acela.proxy.rlwy.net:32558/railway';
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway.internal')
-    ? false
-    : { rejectUnauthorized: false },
+  connectionString: DB_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 app.listen(PORT, () => {
@@ -58,9 +57,9 @@ app.get("/api/debug-headers", (req, res) => { res.json({ headers: req.headers })
 app.get("/api/debug-db", async (req, res) => {
   try {
     const r = await pool.query('SELECT NOW() as now');
-    res.json({ success: true, now: r.rows[0].now, database_url_set: !!process.env.DATABASE_URL });
+    res.json({ success: true, now: r.rows[0].now, database_url_set: !!process.env.DATABASE_URL, using_fallback: !process.env.DATABASE_URL });
   } catch(err) {
-    res.json({ success: false, error: String(err), database_url_set: !!process.env.DATABASE_URL, database_url_prefix: (process.env.DATABASE_URL||'').slice(0,20) });
+    res.json({ success: false, error: String(err), database_url_set: !!process.env.DATABASE_URL, db_url_prefix: DB_URL.slice(0,30) });
   }
 });
 
