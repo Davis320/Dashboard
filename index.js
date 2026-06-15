@@ -32,7 +32,7 @@ app.listen(PORT, () => {
   `).then(() => console.log('DB ready'))
     .catch(err => console.error('DB init error:', err.message, err.code));
 });
-const VALID_DATASETS = ['mapping','od','invreport','compreport','plreport','inbound'];
+const VALID_DATASETS = ['mapping','od','invreport','compreport','plreport','inbound','comments'];
 const FALLBACK_PASSWORD = 'Goodmorning2';
 
 function auth(req, res) {
