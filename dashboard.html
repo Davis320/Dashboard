@@ -1252,42 +1252,62 @@ function renderRoi(){
     if(colVisible(RO,'Comment')) rows+='<td></td>';
     rows+='</tr>';
 
-    // Sort SKUs: ASIN alphabetically first, then SKU alphabetically within ASIN
-    var sortedSkus=brand.skus.slice().sort(function(a,b){
-      var ac=String(a.asin||'').localeCompare(String(b.asin||''));
-      if(ac!==0) return ac;
-      return String(a.sku||'').localeCompare(String(b.sku||''));
+    // Group SKUs by ASIN, sort ASINs alphabetically, SKUs alphabetically within
+    var byAsin={};
+    var asinOrder=[];
+    brand.skus.forEach(function(s){
+      var key=s.asin||'__none__';
+      if(!byAsin[key]){ byAsin[key]=s.asin||''; asinOrder.push(key); brand['_skusByAsin'+key]=[];}
+      (brand['_skusByAsin'+key]=brand['_skusByAsin'+key]||[]).push(s);
+    });
+    // rebuild properly
+    var asinGroups={};
+    brand.skus.forEach(function(s){
+      var key=s.asin||'__none__';
+      if(!asinGroups[key]){ asinGroups[key]={asin:s.asin||'',skus:[]}; }
+      asinGroups[key].skus.push(s);
+    });
+    var sortedAsins=Object.keys(asinGroups).sort(function(a,b){
+      return String(asinGroups[a].asin).localeCompare(String(asinGroups[b].asin));
     });
 
-    // Count how many times each ASIN appears (for red SKU highlight)
-    var asinSkuCount={};
-    sortedSkus.forEach(function(s){ asinSkuCount[s.asin||'']=(asinSkuCount[s.asin||'']||0)+1; });
+    sortedAsins.forEach(function(asinKey){
+      var ag=asinGroups[asinKey];
+      var multiSku=ag.skus.length>1;
 
-    sortedSkus.forEach(function(s){
-      var smom=chg(s.sales[0],s.sales[1]);
-      var syoy=chg(s.sales[0],s.sales[2]);
-      var dupSku=(asinSkuCount[s.asin||'']||0)>1;
-      rows+='<tr class="sales-sku-row'+(isOpen?' visible':'')+'" data-roibrand="'+esc(brand.brand)+'">';
-      rows+=tdIf(RO,'Brand / SKU','<td style="padding-left:16px">'+
-        (s.asin?'<div style="font-size:10px;margin-bottom:2px">'+asinLink(s.asin)+'</div>':'')+
-        '<div style="'+(dupSku?'color:#C00000;':'')+'">'+skuLink(s.sku)+'</div>'+
+      // ASIN header row — no numbers, just the ASIN link
+      rows+='<tr class="sales-sku-row'+(isOpen?' visible':'')+'" data-roibrand="'+esc(brand.brand)+'" style="background:#f5f5f3">';
+      rows+=tdIf(RO,'Brand / SKU','<td style="padding-left:18px;font-size:11px;font-weight:600">'+
+        (ag.asin?asinLink(ag.asin):'<span style="color:#aaa">No ASIN</span>')+
+        (multiSku?'<span style="color:#888;font-size:10px;font-weight:400;margin-left:6px">('+ag.skus.length+' SKUs)</span>':'')+
       '</td>');
-      rows+=tdIf(RO,'Description','<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(s.title||'')+'">'+esc(s.title||'')+'</td>');
-      rows+=tdIf(RO,'P1 Sales','<td class="num">'+fmtRev(s.sales[0])+'</td>');
-      rows+=tdIf(RO,'P2 Sales','<td class="num">'+fmtRev(s.sales[1])+'</td>');
-      rows+=tdIf(RO,'P3 Sales','<td class="num">'+fmtRev(s.sales[2])+'</td>');
-      if(colVisible(RO,'Chg $ (vs P2)')) rows+=dollarChgCell(smom.abs);
-      if(colVisible(RO,'Chg % (vs P2)')) rows+=pctCell(smom.pct);
-      if(colVisible(RO,'Chg $ (vs P3)')) rows+=dollarChgCell(syoy.abs);
-      if(colVisible(RO,'Chg % (vs P3)')) rows+=pctCell(syoy.pct);
-      if(colVisible(RO,'Margin P1')) rows+=marginCell(s.margin[0]);
-      if(colVisible(RO,'Margin P2')) rows+=marginCell(s.margin[1]);
-      if(colVisible(RO,'Margin P3')) rows+=marginCell(s.margin[2]);
-      if(colVisible(RO,'Buy Box P1')) rows+=buyBoxCell(s.buyBoxPct[0]);
-      if(colVisible(RO,'Buy Box P2')) rows+=buyBoxCell(s.buyBoxPct[1]);
-      if(colVisible(RO,'Buy Box P3')) rows+=buyBoxCell(s.buyBoxPct[2]);
-      if(colVisible(RO,'Comment')) rows+=commentCell(s.sku);
+      var numCols=['Description','P1 Sales','P2 Sales','P3 Sales','Chg $ (vs P2)','Chg % (vs P2)','Chg $ (vs P3)','Chg % (vs P3)','Margin P1','Margin P2','Margin P3','Buy Box P1','Buy Box P2','Buy Box P3','Comment'];
+      numCols.forEach(function(c){ if(colVisible(RO,c)) rows+='<td></td>'; });
       rows+='</tr>';
+
+      // SKU rows under this ASIN
+      ag.skus.slice().sort(function(a,b){ return String(a.sku).localeCompare(String(b.sku)); }).forEach(function(s){
+        var smom=chg(s.sales[0],s.sales[1]);
+        var syoy=chg(s.sales[0],s.sales[2]);
+        rows+='<tr class="sales-sku-row'+(isOpen?' visible':'')+'" data-roibrand="'+esc(brand.brand)+'">';
+        rows+=tdIf(RO,'Brand / SKU','<td style="padding-left:32px;'+(multiSku?'color:#C00000':'')+'">'+skuLink(s.sku)+'</td>');
+        rows+=tdIf(RO,'Description','<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(s.title||'')+'">'+esc(s.title||'')+'</td>');
+        rows+=tdIf(RO,'P1 Sales','<td class="num">'+fmtRev(s.sales[0])+'</td>');
+        rows+=tdIf(RO,'P2 Sales','<td class="num">'+fmtRev(s.sales[1])+'</td>');
+        rows+=tdIf(RO,'P3 Sales','<td class="num">'+fmtRev(s.sales[2])+'</td>');
+        if(colVisible(RO,'Chg $ (vs P2)')) rows+=dollarChgCell(smom.abs);
+        if(colVisible(RO,'Chg % (vs P2)')) rows+=pctCell(smom.pct);
+        if(colVisible(RO,'Chg $ (vs P3)')) rows+=dollarChgCell(syoy.abs);
+        if(colVisible(RO,'Chg % (vs P3)')) rows+=pctCell(syoy.pct);
+        if(colVisible(RO,'Margin P1')) rows+=marginCell(s.margin[0]);
+        if(colVisible(RO,'Margin P2')) rows+=marginCell(s.margin[1]);
+        if(colVisible(RO,'Margin P3')) rows+=marginCell(s.margin[2]);
+        if(colVisible(RO,'Buy Box P1')) rows+=buyBoxCell(s.buyBoxPct[0]);
+        if(colVisible(RO,'Buy Box P2')) rows+=buyBoxCell(s.buyBoxPct[1]);
+        if(colVisible(RO,'Buy Box P3')) rows+=buyBoxCell(s.buyBoxPct[2]);
+        if(colVisible(RO,'Comment')) rows+=commentCell(s.sku);
+        rows+='</tr>';
+      });
     });
   });
 
