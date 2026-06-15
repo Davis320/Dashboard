@@ -279,9 +279,10 @@ th.num{text-align:right}
   <div id="page-reorder" class="page">
     <div class="section">
       <div class="sec-title">Reorder Planning</div>
-      <div id="reorder-kpis" class="kpi-row" style="margin-bottom:1rem"></div>
+      <div id="reorder-kpis" class="kpi-grid"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.75rem;align-items:center">
         <input type="text" id="reorder-search" placeholder="Search SKU, title..." oninput="renderReorderTable()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;width:200px">
+        <select id="reorder-brand-filter" onchange="renderReorderTable()"><option value="">All brands</option></select>
         <select id="reorder-fba-filter" onchange="renderReorderTable()"><option value="">All FBA types</option></select>
         <select id="reorder-dos-filter" onchange="renderReorderTable()">
           <option value="">All DOS</option>
@@ -1532,9 +1533,10 @@ function computeReorderData(){
     var salesQtyOd=caseQty?Math.round(salesQty*amazonEaches/caseQty*100)/100:0;
 
     var dosBucket='ok';
-    if(dos<14) dosBucket='critical';
-    else if(dos<30) dosBucket='low';
-    else if(dos<=60) dosBucket='medium';
+    if(dos>0 && dos<14) dosBucket='critical';
+    else if(dos>=14 && dos<30) dosBucket='low';
+    else if(dos>=30 && dos<=60) dosBucket='medium';
+    else if(dos===0) dosBucket='nodata';
 
     return{
       amzSku:m.sku, odSku:m.odSku||'', title:m.title||'', fba:m.fba||m.category||'',
@@ -1546,8 +1548,17 @@ function computeReorderData(){
       odPurchasePrice:odPurchasePrice, odAvgCost:odAvgCost,
       salesQty:salesQty, salesQtyOd:salesQtyOd, profit:profit, margin:margin
     };
-  }).filter(function(r){ return r.amzSku; })
+  }).filter(function(r){ return r.amzSku && (r.amzTotal>0 || r.salesQty>0 || r.odAvail>0); })
     .sort(function(a,b){ return (a.brand||'').localeCompare(b.brand||'') || (a.odSku||'').localeCompare(b.odSku||''); });
+}
+
+function populateReorderBrandFilter(data){
+  var sel=document.getElementById('reorder-brand-filter');
+  if(!sel) return;
+  var cur=sel.value;
+  var vals=[...new Set(data.map(function(r){return r.brand;}).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">All brands</option>';
+  vals.forEach(function(v){ sel.innerHTML+='<option value="'+v+'"'+(v===cur?' selected':'')+'>'+v+'</option>'; });
 }
 
 function populateReorderFbaFilter(data){
@@ -1561,14 +1572,20 @@ function populateReorderFbaFilter(data){
 
 function renderReorderTable(){
   var data=computeReorderData();
+  populateReorderBrandFilter(data);
   populateReorderFbaFilter(data);
   var search=(document.getElementById('reorder-search').value||'').toLowerCase();
+  var brandFilter=document.getElementById('reorder-brand-filter').value;
   var fbaFilter=document.getElementById('reorder-fba-filter').value;
   var dosFilter=document.getElementById('reorder-dos-filter').value;
 
   var filtered=data.filter(function(r){
+    if(brandFilter && r.brand!==brandFilter) return false;
     if(fbaFilter && r.fba!==fbaFilter) return false;
-    if(dosFilter && r.dosBucket!==dosFilter) return false;
+    if(dosFilter==='critical' && r.dosBucket!=='critical') return false;
+    if(dosFilter==='low' && r.dosBucket!=='low') return false;
+    if(dosFilter==='medium' && r.dosBucket!=='medium') return false;
+    if(dosFilter==='ok' && r.dosBucket!=='ok') return false;
     if(search){
       var hay=(r.amzSku+' '+r.odSku+' '+r.title+' '+r.brand).toLowerCase();
       if(hay.indexOf(search)===-1) return false;
@@ -1655,10 +1672,12 @@ function renderReorderTable(){
 
 function exportReorder(){
   var data=computeReorderData();
+  var brandFilter=document.getElementById('reorder-brand-filter').value;
   var fbaFilter=document.getElementById('reorder-fba-filter').value;
   var dosFilter=document.getElementById('reorder-dos-filter').value;
   var search=(document.getElementById('reorder-search').value||'').toLowerCase();
   var filtered=data.filter(function(r){
+    if(brandFilter && r.brand!==brandFilter) return false;
     if(fbaFilter && r.fba!==fbaFilter) return false;
     if(dosFilter && r.dosBucket!==dosFilter) return false;
     if(search){ var hay=(r.amzSku+' '+r.odSku+' '+r.title+' '+r.brand).toLowerCase(); if(hay.indexOf(search)===-1) return false; }
