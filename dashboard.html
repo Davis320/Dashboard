@@ -459,6 +459,15 @@ if(window.location.protocol !== 'file:' && window.location.hostname !== 'localho
   }
 }
 
+function skuLink(sku){
+  if(!sku) return '—';
+  return '<a href="https://sellercentral.amazon.com/skucentral?mSku='+encodeURIComponent(sku)+'" target="_blank" style="color:#185FA5;text-decoration:none;font-weight:500" title="Open in Seller Central">'+esc(sku)+'</a>';
+}
+function asinLink(asin){
+  if(!asin) return '—';
+  return '<a href="https://www.amazon.com/dp/'+encodeURIComponent(asin)+'" target="_blank" style="color:#E47911;text-decoration:none" title="View on Amazon">'+esc(asin)+'</a>';
+}
+
 // ── Multi-select dropdown ──
 var _msState={};  // {id: Set of selected values}
 
@@ -1608,8 +1617,8 @@ function renderShipmentTable(){
     var dupAsin=(asinCount[r.asin]||0)>1;
     var received=receivedSet.has(r.odSku);
     return '<tr>'+
-      tdIf(T,'ASIN','<td style="font-size:11px;color:#185FA5">'+esc(r.asin)+'</td>')+
-      tdIf(T,'SKU','<td style="font-size:12px;font-weight:500;'+(dupAsin?'color:#C00000':'')+'">'+esc(r.sku)+'</td>')+
+      tdIf(T,'ASIN','<td style="font-size:11px">'+asinLink(r.asin)+'</td>')+
+      tdIf(T,'SKU','<td style="font-size:12px;'+(dupAsin?'color:#C00000':'')+'">'+skuLink(r.sku)+'</td>')+
       tdIf(T,'Brand','<td><span class="badge badge-gray">'+esc(brand)+'</span></td>')+
       tdIf(T,'Category','<td style="font-size:12px;color:#555">'+esc(r.shipType||'')+'</td>')+
       tdIf(T,'Description','<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(r.title)+'">'+esc(r.title)+'</td>')+
@@ -1877,7 +1886,7 @@ function renderReorderTable(){
           (colVisible(R,'Case Qty')?'<td rowspan="'+span+'" class="num" style="vertical-align:middle">'+g.caseQty+'</td>':'');
       }
       rows+=
-        tdIf(R,'Amazon SKU','<td style="font-size:11px">'+esc(r.amzSku)+'</td>')+
+        tdIf(R,'Amazon SKU','<td style="font-size:11px">'+skuLink(r.amzSku)+'</td>')+
         tdIf(R,'Title','<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>')+
         tdIf(R,'FBA','<td style="font-size:11px">'+esc(r.fba)+'</td>')+
         tdIf(R,'Eaches','<td class="num">'+r.amazonEaches+'</td>');
