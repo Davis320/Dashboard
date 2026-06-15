@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Amazon Store Health Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f5f5f3;color:#1a1a1a;min-height:100vh;font-size:14px}
+.app{max-width:98vw;margin:0 auto;padding:1rem 1.5rem}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+h1{font-size:20px;font-weight:500}
+.nav{display:flex;gap:4px;background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:4px;flex-wrap:wrap}
+.nav-btn{padding:6px 14px;border-radius:7px;border:none;cursor:pointer;font-size:13px;background:transparent;color:#666}
+.nav-btn.active{background:#1a1a1a;color:#fff}
+.page{display:none}
+.page.active{display:block}
+.section{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:1.25rem;margin-bottom:1rem}
+.sec-title{font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1rem;font-weight:500}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:1rem}
+.kpi{background:#f5f5f3;border-radius:8px;padding:1rem}
+.kpi p{font-size:11px;color:#888;margin-bottom:4px}
+.kpi h2{font-size:22px;font-weight:500}
+.kpi span{font-size:12px}
+.od-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1rem}
+.green{color:#3B6D11}.red{color:#A32D2D}.gray{color:#888}.amber{color:#854F0B}
+.alert{display:flex;align-items:center;gap:8px;padding:.6rem 1rem;border-radius:8px;font-size:13px;margin-bottom:8px}
+.alert-ok{background:#eaf3de;color:#3B6D11}
+.alert-warn{background:#faeeda;color:#854F0B}
+.alert-danger{background:#fcebeb;color:#A32D2D}
+.chart-box{position:relative;height:220px;margin-top:1rem}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.score-wrap{display:flex;align-items:center;gap:1.5rem}
+.score-ring{position:relative;width:90px;height:90px;flex-shrink:0}
+.score-ring canvas{position:absolute}
+.score-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;font-weight:500}
+.score-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #f0f0f0}
+.score-row:last-child{border:none}
+.topbtn{font-size:13px;padding:6px 14px;border-radius:8px;border:1px solid #ccc;cursor:pointer;background:#fff;margin-left:6px}
+.sync-status{font-size:11px;padding:3px 8px;border-radius:6px;margin-left:6px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync-status.ok{background:#eaf3de;color:#3B6D11}
+.sync-status.err{background:#fcebeb;color:#A32D2D}
+.sync-status.syncing{background:#e8f0fe;color:#185FA5}
+.topbtn:hover{background:#f5f5f3}
+.filter-row{display:flex;gap:10px;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.filter-row select,.filter-row input[type=text],.filter-row input[type=date]{padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;border-bottom:2px solid #e5e5e5;color:#888;font-weight:500;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+tr:hover td{background:#fafaf8}
+.badge{font-size:11px;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.badge-blue{background:#E6F1FB;color:#185FA5}
+.badge-green{background:#eaf3de;color:#3B6D11}
+.badge-gray{background:#f1efe8;color:#5F5E5A}
+#overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:99;align-items:center;justify-content:center}
+#overlay.show{display:flex}
+#modal{background:#fff;border-radius:12px;padding:1.5rem;width:380px}
+#modal h3{font-size:16px;font-weight:500;margin-bottom:1rem}
+#modal input{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:12px;display:block}
+#modal label{font-size:12px;color:#888;display:block;margin-bottom:4px}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.btn-cancel{padding:7px 16px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px}
+.btn-ok{padding:7px 16px;border-radius:8px;border:none;background:#1a1a1a;color:#fff;cursor:pointer;font-size:13px}
+.err{color:#A32D2D;font-size:12px;margin-bottom:8px;display:none}
+.upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1rem}
+.upload-card{border:1px solid #e5e5e5;border-radius:10px;padding:1rem;text-align:center}
+.upload-card p{font-size:12px;font-weight:500;margin-bottom:.5rem}
+.upload-zone{border:2px dashed #ddd;border-radius:8px;padding:1.5rem;text-align:center;cursor:pointer;color:#888;font-size:13px}
+.upload-zone:hover{background:#fafaf8}
+.upload-zone input{display:none}
+.st{font-size:11px;color:#888;margin-top:.5rem}
+.st.ok{color:#3B6D11}
+.pager{display:flex;align-items:center;gap:8px;margin-top:1rem;font-size:13px;color:#888}
+.pager button{padding:4px 10px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#fff;font-size:12px}
+.pager button:disabled{opacity:.4;cursor:not-allowed}
+.col-info{margin-top:.75rem;font-size:12px;color:#888;background:#f5f5f3;padding:.75rem;border-radius:8px}
+.expbtn{font-size:12px;padding:6px 12px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer}
+.expbtn:hover{background:#f5f5f3}
+.sales-brand-row{background:#f5f5f3;font-weight:500;cursor:pointer}
+.sales-brand-row:hover td{background:#eeecea !important}
+.brand-toggle{font-size:10px;color:#888;margin-right:4px}
+.sales-sku-row{display:none}
+.sales-sku-row.visible{display:table-row}
+.sales-sku-row td:first-child{padding-left:2rem}
+.sales-total-row td{background:#1a1a1a !important;color:#fff;font-weight:500}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+th.num{text-align:right}
+.resizable-table{table-layout:fixed;width:max-content;min-width:100%}
+.resizable-table th{position:relative;overflow:hidden;text-overflow:ellipsis;white-space:normal;vertical-align:bottom}
+.resizable-table td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.resizable-table td.wrap-cell{white-space:normal;line-height:1.35;vertical-align:middle;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;max-height:calc(1.35em*3)}
+.col-resize-handle{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize;user-select:none;z-index:2}
+.col-resize-handle:hover,.col-resize-handle.resizing{background:rgba(24,95,165,0.3)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h1>&#x1F4E6; Store health tracker</h1>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <nav class="nav">
+        <button class="nav-btn active" onclick="showPage('dashboard',this)">Dashboard</button>
+        <button class="nav-btn" onclick="showPage('roi',this)">Sales &amp; ROI</button>
+        <button class="nav-btn" onclick="showPage('mapping',this)">Product mapping</button>
+        <button class="nav-btn" onclick="showPage('od',this)">OD inventory</button>
+        <button class="nav-btn" onclick="showPage('shipment',this)">Shipment</button>
+        <button class="nav-btn" onclick="showPage('uploads',this)">Uploads</button>
+      </nav>
+      <span id="sync-status" class="sync-status"></span>
+      <button class="topbtn" onclick="loadAllFromServer()" title="Refresh from server">&#8635;</button>
+      <button class="topbtn" onclick="openSettingsModal()" title="Settings">&#9881;</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <div id="dashboard-content">
+      <div class="section" style="text-align:center;padding:2rem;color:#888">
+        <p style="margin-bottom:1rem">No data uploaded yet. Go to the Uploads tab to add your reports.</p>
+        <button class="btn-ok" onclick="showPage('uploads',document.querySelector('.nav-btn[onclick*=uploads]'))">Go to Uploads</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SALES & ROI (from uploaded reports) -->
+  <div id="page-roi" class="page">
+    <div class="section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+        <div class="sec-title" style="margin-bottom:0">Sales &amp; ROI by brand (from uploaded reports)</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="roi-mode" onchange="renderRoi()">
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+          <select id="roi-brand-filter" onchange="renderRoi()"><option value="">All brands</option></select>
+          <button class="expbtn" onclick="exportRoi()">&#8659; Export Excel</button>
+        </div>
+      </div>
+      <div id="roi-period-info" style="font-size:12px;color:#888;margin-bottom:.75rem"></div>
+      <div id="roi-kpis" class="kpi-grid"></div>
+      <div class="tbl-wrap">
+        <table id="roi-table" class="resizable-table">
+          <thead><tr id="roi-thead"></tr></thead>
+          <tbody id="roi-body"></tbody>
+        </table>
+      </div>
+      <div id="roi-empty" style="text-align:center;padding:2rem;color:#888">
+        Upload an Inventory Report and Comparison Report on the Uploads tab to see ROI data.
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT MAPPING -->
+  <div id="page-mapping" class="page">
+    <div class="section">
+      <div class="sec-title">Product mapping</div>
+      <div class="filter-row">
+        <input type="text" id="map-search" placeholder="Search ASIN, SKU, title..." oninput="renderMappingTable()" style="flex:1;max-width:280px">
+        <select id="map-brand" onchange="renderMappingTable()"><option value="">All brands</option></select>
+        <select id="map-fba" onchange="renderMappingTable()">
+          <option value="">All FBA types</option>
+          <option value="Marketplace">Marketplace</option>
+          <option value="Seller">Seller</option>
+        </select>
+        <button class="btn-ok" onclick="addMappingRow()" style="font-size:12px;padding:6px 12px">+ Add row</button>
+        <button class="expbtn" onclick="exportMapping()">&#8659; Export Excel</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Active</th><th>Brand</th><th>ASIN</th><th>Amazon SKU</th><th>OD SKU</th>
+            <th>Amazon title</th><th>Eaches</th><th>FBA</th><th>Category</th><th></th>
+          </tr></thead>
+          <tbody id="mapping-body"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="map-prev" disabled onclick="mapPage--;renderMappingTable()">&#8592;</button>
+        <span id="map-page-info"></span>
+        <button id="map-next" onclick="mapPage++;renderMappingTable()">&#8594;</button>
+        <span style="margin-left:auto" id="mapping-count"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- OD INVENTORY -->
+  <div id="page-od" class="page">
+    <div class="section">
+      <div class="sec-title">Oil Depot warehouse inventory</div>
+      <div class="filter-row">
+        <input type="text" id="od-search" placeholder="Search name, SKU, brand..." oninput="renderODTable()" style="flex:1;max-width:280px">
+        <select id="od-brand-filter" onchange="renderODTable()"><option value="">All brands</option></select>
+        <select id="od-family-filter" onchange="renderODTable()"><option value="">All categories</option></select>
+        <select id="od-stock-filter" onchange="renderODTable()">
+          <option value="">All stock levels</option>
+          <option value="low">Low (&lt;1000)</option>
+          <option value="ok">OK (1000+)</option>
+        </select>
+        <button class="expbtn" onclick="exportOD()">&#8659; Export Excel</button>
+      </div>
+      <div class="od-kpis" id="od-kpis-wrap"></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Brand</th><th>OD SKU</th><th>Description</th><th>Category</th>
+            <th>Available</th><th>On Hand</th><th>On PO</th><th>Avg Cost</th>
+            <th>Amazon ASINs</th><th>Amazon Title</th>
+          </tr></thead>
+          <tbody id="od-body"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="od-prev" disabled onclick="odPage--;renderODTable()">&#8592;</button>
+        <span id="od-page-info"></span>
+        <button id="od-next" onclick="odPage++;renderODTable()">&#8594;</button>
+        <span style="margin-left:auto" id="od-count"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHIPMENT -->
+  <div id="page-shipment" class="page">
+    <div class="section">
+      <div class="sec-title">Shipment suggestions by SKU</div>
+      <div class="filter-row">
+        <input type="text" id="ship-search" placeholder="Search SKU, ASIN, title..." oninput="renderShipmentTable()" style="flex:1;max-width:280px">
+        <select id="ship-brand-filter" onchange="renderShipmentTable()"><option value="">All brands</option></select>
+        <select id="ship-dos-filter" onchange="renderShipmentTable()">
+          <option value="">All DOS buckets</option>
+          <option value="0-30">0-30</option>
+          <option value="31-60">31-60</option>
+          <option value="61-90">61-90</option>
+          <option value="91-120">91-120</option>
+          <option value="120+">120+</option>
+        </select>
+        <select id="ship-zero-filter" onchange="renderShipmentTable()">
+          <option value="">All SKUs</option>
+          <option value="zero">Zero sales only</option>
+        </select>
+        <select id="ship-cat-filter" onchange="renderShipmentTable()"><option value="">All categories</option></select>
+        <select id="ship-received-filter" onchange="renderShipmentTable()">
+          <option value="">All (received &amp; not)</option>
+          <option value="yes">Received this week only</option>
+          <option value="no">Not received this week</option>
+        </select>
+        <select id="ship-active-filter" onchange="renderShipmentTable()">
+          <option value="">Active &amp; inactive</option>
+          <option value="Active">Active only</option>
+          <option value="Inactive">Inactive only</option>
+        </select>
+        <button class="expbtn" onclick="exportShipment()">&#8659; Export Excel</button>
+      </div>
+      <div id="ship-kpis" class="kpi-grid"></div>
+      <div class="tbl-wrap">
+        <table id="ship-table" class="resizable-table">
+          <thead><tr id="ship-thead"></tr></thead>
+          <tbody id="ship-body"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="ship-prev" disabled onclick="shipPage--;renderShipmentTable()">&#8592;</button>
+        <span id="ship-page-info"></span>
+        <button id="ship-next" onclick="shipPage++;renderShipmentTable()">&#8594;</button>
+        <span style="margin-left:auto" id="ship-count"></span>
+      </div>
+      <div id="ship-empty" style="text-align:center;padding:2rem;color:#888">
+        Upload your Product mapping, Inventory Report, OD inventory, and Comparison Report on the Uploads tab to see shipment suggestions.
+      </div>
+    </div>
+  </div>
+
+  <!-- UPLOADS -->
+  <div id="page-uploads" class="page">
+    <div class="section">
+      <div class="sec-title">Upload data files</div>
+      <p style="font-size:13px;color:#888;margin-bottom:1rem">Upload your Amazon product mapping, Oil Depot inventory, and Sales/ROI reports. Accepts .xlsx or .csv.</p>
+      <div class="upload-grid">
+        <div class="upload-card">
+          <p>&#128204; Amazon product mapping</p>
+          <div class="upload-zone" onclick="document.getElementById('f-mapping').click()">
+            Drop .xlsx or .csv here<br>or click to upload
+            <input type="file" id="f-mapping" accept=".csv,.xlsx,.xls" onchange="handleUpload('mapping',this)">
+          </div>
+          <div class="st" id="st-mapping">No file uploaded</div>
+        </div>
+        <div class="upload-card">
+          <p>&#127981; OD inventory</p>
+          <div class="upload-zone" onclick="document.getElementById('f-od').click()">
+            Drop .xlsx or .csv here<br>or click to upload
+            <input type="file" id="f-od" accept=".csv,.xlsx,.xls" onchange="handleUpload('od',this)">
+          </div>
+          <div class="st" id="st-od">No file uploaded</div>
+        </div>
+        <div class="upload-card">
+          <p>&#128202; Inventory Report (ROI)</p>
+          <div class="upload-zone" onclick="document.getElementById('f-inv-report').click()">
+            Drop .csv or .xlsx here<br>or click to upload
+            <input type="file" id="f-inv-report" accept=".csv,.xlsx,.xls" onchange="handleUpload('invreport',this)">
+          </div>
+          <div class="st" id="st-invreport">No file uploaded</div>
+        </div>
+        <div class="upload-card">
+          <p>&#128201; Comparison Report (periods)</p>
+          <div class="upload-zone" onclick="document.getElementById('f-comp-report').click()">
+            Drop .csv or .xlsx here<br>or click to upload
+            <input type="file" id="f-comp-report" accept=".csv,.xlsx,.xls" onchange="handleUpload('compreport',this)">
+          </div>
+          <div class="st" id="st-compreport">No file uploaded</div>
+        </div>
+        <div class="upload-card">
+          <p>&#128181; PL Report (30-day)</p>
+          <div class="upload-zone" onclick="document.getElementById('f-pl-report').click()">
+            Drop .csv or .xlsx here<br>or click to upload
+            <input type="file" id="f-pl-report" accept=".csv,.xlsx,.xls" onchange="handleUpload('plreport',this)">
+          </div>
+          <div class="st" id="st-plreport">No file uploaded</div>
+        </div>
+        <div class="upload-card">
+          <p>&#128666; Received This Week</p>
+          <div class="upload-zone" onclick="document.getElementById('f-inbound').click()">
+            Drop .csv or .xlsx here<br>or click to upload
+            <input type="file" id="f-inbound" accept=".csv,.xlsx,.xls" onchange="handleUpload('inbound',this)">
+          </div>
+          <div class="st" id="st-inbound">No file uploaded</div>
+        </div>
+      </div>
+      <div id="upload-preview"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settings-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:1.5rem;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+    <h3 style="margin-bottom:1rem;font-size:16px">&#9881; Server settings</h3>
+    <label style="font-size:13px;color:#555;display:block;margin-bottom:.25rem">Railway backend URL</label>
+    <input type="text" id="settings-url" placeholder="https://sp-api-backend-production.up.railway.app" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:.75rem;box-sizing:border-box">
+    <label style="font-size:13px;color:#555;display:block;margin-bottom:.25rem">Dashboard password</label>
+    <input type="password" id="settings-pwd" placeholder="Password" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:1rem;box-sizing:border-box">
+    <div id="settings-err" style="display:none;color:#A32D2D;font-size:12px;margin-bottom:.75rem"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeSettingsModal()" style="padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;font-size:13px">Cancel</button>
+      <button onclick="saveSettings()" style="padding:7px 16px;border-radius:8px;border:none;background:#1a1a1a;color:#fff;cursor:pointer;font-size:13px">Save &amp; connect</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var mappingData=JSON.parse(localStorage.getItem('amz_mapping')||'[]');
+var odData=JSON.parse(localStorage.getItem('amz_od')||'[]');
+var invReportData=JSON.parse(localStorage.getItem('amz_invreport')||'[]');
+var compReportData=JSON.parse(localStorage.getItem('amz_compreport')||'null');
+var plReportData=JSON.parse(localStorage.getItem('amz_plreport')||'[]');
+var inboundSkus=JSON.parse(localStorage.getItem('amz_inbound')||'[]'); // array of OD SKUs received this week
+
+// ── Server sync ──
+var serverUrl=localStorage.getItem('dash_server_url')||'';
+var serverPwd=localStorage.getItem('dash_server_pwd')||'';
+
+// Auto-detect: if served from Railway, use same origin as server URL
+if(!serverUrl && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.protocol.startsWith('file')){
+  serverUrl = window.location.origin;
+  serverPwd = serverPwd || 'Goodmorning2';
+}
+
+function setSyncStatus(msg, type){
+  var el=document.getElementById('sync-status');
+  if(!el) return;
+  el.textContent=msg;
+  el.className='sync-status '+(type||'');
+}
+
+async function syncToServer(dataset, data){
+  if(!serverUrl||!serverPwd) return;
+  try{
+    setSyncStatus('Syncing…','syncing');
+    var res=await fetch(serverUrl+'/api/data/'+dataset+'?pwd='+encodeURIComponent(serverPwd),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(data)
+    });
+    var json=await res.json();
+    if(!json.success) throw new Error(json.error||'Server error');
+    setSyncStatus('Synced ✓ '+new Date().toLocaleTimeString(),'ok');
+  }catch(e){
+    setSyncStatus('Sync failed: '+e.message,'err');
+  }
+}
+
+async function loadAllFromServer(){
+  if(!serverUrl||!serverPwd){ setSyncStatus('Not connected — enter URL & password in ⚙','err'); return; }
+  setSyncStatus('Loading from server…','syncing');
+  var datasets=['mapping','od','invreport','compreport','plreport','inbound'];
+  var loaded=0;
+  for(var i=0;i<datasets.length;i++){
+    var ds=datasets[i];
+    try{
+      var res=await fetch(serverUrl+'/api/data/'+ds+'?pwd='+encodeURIComponent(serverPwd));
+      var json=await res.json();
+      if(json.success && json.data!==null){
+        applyServerData(ds, json.data);
+        loaded++;
+      }
+    }catch(e){ console.warn('Failed to load '+ds, e.message); }
+  }
+  setSyncStatus('Loaded '+loaded+'/'+datasets.length+' datasets ✓ '+new Date().toLocaleTimeString(),'ok');
+  refreshAllViews();
+}
+
+function applyServerData(dataset, data){
+  if(dataset==='mapping'){
+    mappingData=data;
+    localStorage.setItem('amz_mapping',JSON.stringify(data));
+  }else if(dataset==='od'){
+    odData=data;
+    localStorage.setItem('amz_od',JSON.stringify(data));
+  }else if(dataset==='invreport'){
+    invReportData=data;
+    localStorage.setItem('amz_invreport',JSON.stringify(data));
+  }else if(dataset==='compreport'){
+    compReportData=data;
+    localStorage.setItem('amz_compreport',JSON.stringify(data));
+  }else if(dataset==='plreport'){
+    plReportData=data;
+    localStorage.setItem('amz_plreport',JSON.stringify(data));
+  }else if(dataset==='inbound'){
+    inboundSkus=data;
+    localStorage.setItem('amz_inbound',JSON.stringify(data));
+  }
+}
+
+function refreshAllViews(){
+  populateMappingBrandFilter(); populateRoiBrandFilter();
+  populateODFilters(); populateShipBrandFilter(); populateShipCatFilter();
+  renderMappingTable(); renderODTable(); renderRoi(); renderShipmentTable();
+  updateUploadStatuses();
+}
+
+function updateUploadStatuses(){
+  if(mappingData.length){ document.getElementById('st-mapping').textContent='✓ '+mappingData.length+' rows'; document.getElementById('st-mapping').className='st ok'; }
+  if(odData.length){ document.getElementById('st-od').textContent='✓ '+odData.length+' rows'; document.getElementById('st-od').className='st ok'; }
+  if(invReportData.length){ document.getElementById('st-invreport').textContent='✓ '+invReportData.length+' SKUs'; document.getElementById('st-invreport').className='st ok'; }
+  if(compReportData&&compReportData.periods){ document.getElementById('st-compreport').textContent='✓ '+Object.keys(compReportData.data).length+' SKUs'; document.getElementById('st-compreport').className='st ok'; }
+  if(plReportData.length){ document.getElementById('st-plreport').textContent='✓ '+plReportData.length+' SKUs'; document.getElementById('st-plreport').className='st ok'; }
+  if(inboundSkus.length){ document.getElementById('st-inbound').textContent='✓ '+inboundSkus.length+' OD SKUs'; document.getElementById('st-inbound').className='st ok'; }
+}
+
+function openSettingsModal(){
+  document.getElementById('settings-url').value=serverUrl;
+  document.getElementById('settings-pwd').value=serverPwd;
+  document.getElementById('settings-err').style.display='none';
+  document.getElementById('settings-overlay').style.display='flex';
+}
+function closeSettingsModal(){
+  document.getElementById('settings-overlay').style.display='none';
+}
+document.addEventListener('DOMContentLoaded',function(){
+  var overlay=document.getElementById('settings-overlay');
+  if(overlay) overlay.addEventListener('click',function(e){if(e.target===this)closeSettingsModal();});
+});
+async function saveSettings(){
+  var url=document.getElementById('settings-url').value.trim().replace(/\/+$/,'');
+  var pwd=document.getElementById('settings-pwd').value;
+  var errEl=document.getElementById('settings-err');
+  if(!url||!pwd){ errEl.textContent='Please enter both URL and password.'; errEl.style.display='block'; return; }
+  // Test connection
+  try{
+    var res=await fetch(url+'/api/data?pwd='+encodeURIComponent(pwd));
+    var json=await res.json();
+    if(!json.success) throw new Error(json.error||'Auth failed');
+  }catch(e){
+    errEl.textContent='Could not connect: '+e.message;
+    errEl.style.display='block';
+    return;
+  }
+  serverUrl=url; serverPwd=pwd;
+  localStorage.setItem('dash_server_url',serverUrl);
+  localStorage.setItem('dash_server_pwd',serverPwd);
+  closeSettingsModal();
+  loadAllFromServer();
+}
+
+var mapPage=0,odPage=0,shipPage=0,PAGE=20;
+var roiExpanded={};
+
+function parseNum(v){
+  if(v===undefined||v===null||v==='')return 0;
+  var s=String(v).replace(/[$,%\s]/g,'');
+  var n=parseFloat(s);
+  return isNaN(n)?0:n;
+}
+
+// ── Navigation ──
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='mapping') renderMappingTable();
+  if(id==='od') renderODTable();
+  if(id==='roi') renderRoi();
+  if(id==='shipment') renderShipmentTable();
+}
+
+// ── File upload ──
+function handleUpload(type,input){
+  var file=input.files[0];
+  if(!file)return;
+  if(/\.xlsx?$/i.test(file.name)){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        processRows(type,file.name,rows);
+      }catch(err){
+        document.getElementById('upload-preview').innerHTML='<div class="alert alert-danger">Error: '+err.message+'</div>';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }else{
+    Papa.parse(file,{header:true,skipEmptyLines:true,complete:function(res){processRows(type,file.name,res.data);}});
+  }
+}
+
+function processRows(type,filename,rows){
+  if(!rows.length){document.getElementById('upload-preview').innerHTML='<div class="alert alert-danger">No data found.</div>';return;}
+  var cols=Object.keys(rows[0]);
+  var preview='<div class="alert alert-ok">&#10003; '+filename+' — '+rows.length+' rows loaded.</div>'+
+    '<div class="col-info"><strong>Columns found:</strong> '+cols.join(' | ')+'</div>';
+
+  if(type==='mapping'){
+    var mode=mappingData.length>0?(confirm('OK = Overwrite all. Cancel = Add new SKUs only.')? 'overwrite':'merge'):'overwrite';
+    var newRows=rows.map(function(r){
+      var odSku=findCol(r,['OD SKU','od_sku','OD Sku','ODSKU']);
+      var odMatch=odData.find(function(o){return o.sku===odSku;});
+      var brand=odMatch?odMatch.brand:findCol(r,['Brand','brand']);
+      return{
+        active:'Active',brand:brand,
+        asin:findCol(r,['Asin','ASIN','asin']),
+        sku:findCol(r,['Sku','SKU','sku','Amazon SKU']),
+        title:findCol(r,['Amazon Title ','Amazon Title','Amazon title','Title','title','Product Title']),
+        odSku:odSku,
+        eaches:findCol(r,['Amazon Eaches','Eaches','eaches']),
+        fba:findCol(r,['FBA','fba']),
+        category:findCol(r,['Category','category'])
+      };
+    });
+    if(mode==='overwrite'){
+      mappingData=newRows;
+    }else{
+      var ex=mappingData.map(function(r){return r.sku;});
+      var added=0;
+      newRows.forEach(function(r){if(ex.indexOf(r.sku)===-1){mappingData.push(r);added++;}});
+      preview+='<div class="col-info" style="margin-top:.5rem">Merge: '+added+' new SKUs added.</div>';
+    }
+    mappingData.forEach(function(r){if(!r.active)r.active='Active';});
+    localStorage.setItem('amz_mapping',JSON.stringify(mappingData));
+    syncToServer('mapping',mappingData);
+    document.getElementById('st-mapping').textContent='✓ '+filename+' ('+mappingData.length+' rows)';
+    document.getElementById('st-mapping').className='st ok';
+    populateMappingBrandFilter(); populateRoiBrandFilter();
+    if(mappingData.length) preview+='<div class="col-info" style="margin-top:.5rem"><strong>Sample:</strong> Brand='+mappingData[0].brand+' | ASIN='+mappingData[0].asin+' | Title='+mappingData[0].title+'</div>';
+    renderShipmentTable();
+  }else if(type==='od'){
+    var mode2=odData.length>0?(confirm('OK = Overwrite all. Cancel = Add new SKUs only.')? 'overwrite':'merge'):'overwrite';
+    var newOd=rows.map(function(r){
+      return{
+        brand:findCol(r,['Brand','brand']),
+        sku:findCol(r,['Name','name','SKU','sku']),
+        description:findCol(r,['Description','description']),
+        family:findCol(r,['Item Family*','Item Family','family','Category']),
+        available:findCol(r,['Available','available']),
+        onHand:findCol(r,['On Hand','on_hand','OnHand']),
+        onPO:findCol(r,['on PO','On PO','on_po']),
+        avgCost:findCol(r,['Average Cost','avg_cost']),
+        purchasePrice:findCol(r,['Purchase Price','purchase_price']),
+        primarySaleUnit:findCol(r,['Primary Sale Unit','primary sale unit']),
+        primaryUnitsType:findCol(r,['Primary Units Type','primary units type'])
+      };
+    });
+    if(mode2==='overwrite'){odData=newOd;}
+    else{
+      var exOd=odData.map(function(r){return r.sku;});
+      var addedOd=0;
+      newOd.forEach(function(r){if(exOd.indexOf(r.sku)===-1){odData.push(r);addedOd++;}});
+      preview+='<div class="col-info" style="margin-top:.5rem">Merge: '+addedOd+' new SKUs added.</div>';
+    }
+    localStorage.setItem('amz_od',JSON.stringify(odData));
+    syncToServer('od',odData);
+    document.getElementById('st-od').textContent='✓ '+filename+' ('+odData.length+' rows)';
+    document.getElementById('st-od').className='st ok';
+    mappingData.forEach(function(m){
+      if((!m.brand||m.brand==='')&&m.odSku){
+        var od=odData.find(function(o){return o.sku===m.odSku;});
+        if(od) m.brand=od.brand;
+      }
+    });
+    if(mappingData.length) localStorage.setItem('amz_mapping',JSON.stringify(mappingData));
+    populateODFilters(); populateMappingBrandFilter(); populateRoiBrandFilter();
+    if(odData.length) preview+='<div class="col-info" style="margin-top:.5rem"><strong>Sample:</strong> Brand='+odData[0].brand+' | SKU='+odData[0].sku+' | Available='+odData[0].available+'</div>';
+    renderShipmentTable();
+  }else if(type==='invreport'){
+    invReportData=rows.map(function(r){
+      return{
+        sku: findCol(r,['Sku','SKU','sku']),
+        item: findCol(r,['Item','item']),
+        total: parseNum(findCol(r,['Total','total'])),
+        inbound: parseNum(findCol(r,['Inbound','inbound'])),
+        available: parseNum(findCol(r,['Available','available'])),
+        reserved: parseNum(findCol(r,['Reserved','reserved'])),
+        daysOfSupply: parseNum(findCol(r,['Days Of Supply','Days of Supply'])),
+        assetValue: parseNum(findCol(r,['Asset Value','asset value'])),
+        grossSales: parseNum(findCol(r,['Gross Sales','gross sales'])),
+        salesQty: parseNum(findCol(r,['Sales Qty','sales qty'])),
+        profit: parseNum(findCol(r,['Profit','profit'])),
+        cost: parseNum(findCol(r,['Cost','cost'])),
+        roi: parseNum(findCol(r,['ROI','roi'])),
+        turnoverRate: parseNum(findCol(r,['Inventory Turnover Rate','inventory turnover rate']))
+      };
+    });
+    localStorage.setItem('amz_invreport',JSON.stringify(invReportData));
+    syncToServer('invreport',invReportData);
+    document.getElementById('st-invreport').textContent='✓ '+filename+' ('+invReportData.length+' SKUs)';
+    document.getElementById('st-invreport').className='st ok';
+    if(invReportData.length) preview+='<div class="col-info" style="margin-top:.5rem"><strong>Sample:</strong> SKU='+invReportData[0].sku+' | Gross Sales=$'+invReportData[0].grossSales+' | ROI='+invReportData[0].roi+'%</div>';
+    renderRoi();
+    renderShipmentTable();
+  }else if(type==='compreport'){
+    var allCols=Object.keys(rows[0]);
+    var metricCol=allCols[1];
+    var periodLabels=allCols.slice(2).filter(function(c){return c&&c.trim()!=='';});
+
+    var bySkuMetric={};
+    rows.forEach(function(r){
+      var sku=findCol(r,['Item','item']);
+      var metric=r[metricCol];
+      if(!sku||!metric)return;
+      if(!bySkuMetric[sku])bySkuMetric[sku]={};
+      bySkuMetric[sku][metric]={};
+      periodLabels.forEach(function(p){
+        var val=parseNum(r[p]);
+        // Buy Box % can come in as a fraction (0.85) or whole number (85)
+        // depending on the source cell's number format. Normalize to 0-100.
+        if(metric==='Buy Box %' && val>0 && val<=1) val=val*100;
+        bySkuMetric[sku][metric][p]=val;
+      });
+    });
+
+    compReportData={periods:periodLabels, data:bySkuMetric};
+    localStorage.setItem('amz_compreport',JSON.stringify(compReportData));
+    syncToServer('compreport',compReportData);
+    var skuCount=Object.keys(bySkuMetric).length;
+    document.getElementById('st-compreport').textContent='✓ '+filename+' ('+skuCount+' SKUs, '+periodLabels.length+' periods)';
+    document.getElementById('st-compreport').className='st ok';
+    preview+='<div class="col-info" style="margin-top:.5rem"><strong>Periods detected:</strong> '+periodLabels.join(' | ')+'</div>';
+    renderRoi();
+    renderShipmentTable();
+  }else if(type==='plreport'){
+    plReportData=rows.map(function(r){
+      return{
+        sku:    findCol(r,['Item','item','Sku','SKU','sku']),
+        salesQty: parseNum(findCol(r,['Sales Qty','sales qty'])),
+        cost:   parseNum(findCol(r,['Cost','cost'])),
+        profit: parseNum(findCol(r,['Profit','profit']))
+      };
+    }).filter(function(r){return r.sku;});
+    localStorage.setItem('amz_plreport',JSON.stringify(plReportData));
+    syncToServer('plreport',plReportData);
+    document.getElementById('st-plreport').textContent='✓ '+filename+' ('+plReportData.length+' SKUs)';
+    document.getElementById('st-plreport').className='st ok';
+    if(plReportData.length) preview+='<div class="col-info" style="margin-top:.5rem"><strong>Sample:</strong> SKU='+plReportData[0].sku+' | Sales Qty='+plReportData[0].salesQty+' | Cost='+plReportData[0].cost+' | Profit='+plReportData[0].profit+'</div>';
+    renderShipmentTable();
+  }else if(type==='inbound'){
+    // Column F (index 5) contains values like "MID : 2310" — extract the part after ':'
+    var skuSet=[];
+    rows.forEach(function(r){
+      var vals=Object.values(r);
+      var colF=vals[5];  // 0-indexed: columns A-F → indices 0-5
+      if(colF===undefined||colF===null||colF==='') return;
+      var s=String(colF);
+      var idx=s.indexOf(':');
+      if(idx===-1) return;
+      var odSku=s.slice(idx+1).trim();
+      if(odSku) skuSet.push(odSku);
+    });
+    inboundSkus=[...new Set(skuSet)];
+    localStorage.setItem('amz_inbound',JSON.stringify(inboundSkus));
+    syncToServer('inbound',inboundSkus);
+    document.getElementById('st-inbound').textContent='✓ '+filename+' ('+inboundSkus.length+' OD SKUs received)';
+    document.getElementById('st-inbound').className='st ok';
+    preview+='<div class="col-info" style="margin-top:.5rem"><strong>OD SKUs received this week:</strong> '+inboundSkus.slice(0,5).join(', ')+(inboundSkus.length>5?' …':'')+'</div>';
+    renderShipmentTable();
+  }
+  document.getElementById('upload-preview').innerHTML=preview;
+}
+
+function findCol(row,keys){
+  for(var i=0;i<keys.length;i++){
+    var v=row[keys[i]];
+    if(v!==undefined&&v!=='') return String(v).trim();
+  }
+  var rkeys=Object.keys(row);
+  for(var j=0;j<keys.length;j++){
+    var match=rkeys.find(function(k){return k.trim().toLowerCase()===keys[j].trim().toLowerCase();});
+    if(match&&row[match]!=='') return String(row[match]).trim();
+  }
+  return '';
+}
+
+// Like findCol, but collapses internal whitespace/newlines before comparing
+// (handles multi-line Excel headers like "Amazon\nTotal")
+function normWS(s){
+  return String(s).replace(/\s+/g,' ').trim().toLowerCase();
+}
+function findColWS(row,keys){
+  var rkeys=Object.keys(row);
+  for(var j=0;j<keys.length;j++){
+    var target=normWS(keys[j]);
+    var match=rkeys.find(function(k){return normWS(k)===target;});
+    if(match!==undefined && row[match]!=='') return row[match];
+  }
+  return '';
+}
+
+// ── Filters ──
+function populateMappingBrandFilter(){
+  var brands=[...new Set(mappingData.map(function(r){return r.brand;}).filter(Boolean))].sort();
+  var sel=document.getElementById('map-brand');
+  sel.innerHTML='<option value="">All brands</option>';
+  brands.forEach(function(b){sel.innerHTML+='<option value="'+b+'">'+b+'</option>';});
+}
+function populateRoiBrandFilter(){
+  var brands=[...new Set(mappingData.map(function(r){return r.brand;}).filter(Boolean))].sort();
+  var sel=document.getElementById('roi-brand-filter');
+  if(!sel)return;
+  var cur=sel.value;
+  sel.innerHTML='<option value="">All brands</option>';
+  brands.forEach(function(b){sel.innerHTML+='<option value="'+b+'"'+(b===cur?' selected':'')+'>'+b+'</option>';});
+}
+function populateODFilters(){
+  var brands=[...new Set(odData.map(function(r){return r.brand;}).filter(Boolean))].sort();
+  var s1=document.getElementById('od-brand-filter');
+  s1.innerHTML='<option value="">All brands</option>';
+  brands.forEach(function(b){s1.innerHTML+='<option value="'+b+'">'+b+'</option>';});
+  var fams=[...new Set(odData.map(function(r){return r.family;}).filter(Boolean))].sort();
+  var s2=document.getElementById('od-family-filter');
+  s2.innerHTML='<option value="">All categories</option>';
+  fams.forEach(function(f){s2.innerHTML+='<option value="'+f+'">'+f+'</option>';});
+}
+
+
+// ── Sales & ROI (from uploaded reports) ──
+// Parse a period label like "5/01/26-5/27/26" into a day count (inclusive)
+function periodDayCount(label){
+  if(!label) return null;
+  var parts=String(label).split('-');
+  if(parts.length!==2) return null;
+  var d1=parseDateMDY(parts[0].trim());
+  var d2=parseDateMDY(parts[1].trim());
+  if(!d1||!d2) return null;
+  var days=Math.round((d2-d1)/(24*60*60*1000))+1;
+  return days>0?days:null;
+}
+function parseDateMDY(s){
+  var m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if(!m) return null;
+  var mo=+m[1],da=+m[2],yr=+m[3];
+  if(yr<100) yr+=2000;
+  return new Date(yr,mo-1,da);
+}
+
+// Normalize a raw period total to the comparison basis ('weekly' or 'monthly')
+// idx: 0=P1 (this week, 7 days), 1=P2, 2=P3 (monthly periods with known day counts)
+function normalizeValue(val, idx, mode, dayCounts){
+  val=+val||0;
+  if(mode==='weekly'){
+    if(idx===0) return val; // P1 already ~7 days
+    var days=dayCounts[idx];
+    if(!days) return val;
+    return val/days*7;
+  }else{ // monthly
+    if(idx===0) return val/7*30; // scale this week up to a 30-day equivalent
+    var daysM=dayCounts[idx];
+    if(!daysM) return val;
+    return val/daysM*30; // normalize P2/P3 to 30-day equivalent too
+  }
+}
+
+function renderRoi(){
+  var empty=document.getElementById('roi-empty');
+  if(!compReportData||!compReportData.periods||compReportData.periods.length<3){
+    empty.style.display='block';
+    document.getElementById('roi-thead').innerHTML='';
+    document.getElementById('roi-body').innerHTML='';
+    document.getElementById('roi-kpis').innerHTML='';
+    document.getElementById('roi-period-info').innerHTML='';
+    return;
+  }
+  empty.style.display='none';
+  populateRoiBrandFilter();
+
+  var mode=document.getElementById('roi-mode').value; // 'weekly' or 'monthly'
+  var brandFilter=document.getElementById('roi-brand-filter').value;
+  var periods=compReportData.periods.slice(0,3); // [P1,P2,P3]
+  var dayCounts=periods.map(periodDayCount);
+
+  var colLabels;
+  if(mode==='weekly'){
+    colLabels=[periods[0]+' (week)',periods[1]+' (avg/wk)',periods[2]+' (avg/wk)'];
+  }else{
+    colLabels=[periods[0]+' (month est.)',periods[1],periods[2]];
+  }
+
+  // Build inventory lookup for available / days of supply
+  var invBySku={};
+  invReportData.forEach(function(inv){ invBySku[inv.sku]=inv; });
+
+  var skuData={};
+  Object.keys(compReportData.data).forEach(function(sku){
+    var metrics=compReportData.data[sku];
+    function metricArr(name){
+      return periods.map(function(p,i){
+        var raw=metrics[name]?(metrics[name][p]||0):0;
+        return normalizeValue(raw,i,mode,dayCounts);
+      });
+    }
+    var sales=metricArr('Sales');
+    var cost=metricArr('Cost');
+    var profit=metricArr('Profit');
+    var buyBox=periods.map(function(p){
+      var v=metrics['Buy Box %']?metrics['Buy Box %'][p]:null;
+      return (v===undefined||v===null)?null:v;
+    });
+    var inv=invBySku[sku];
+    skuData[sku]={
+      sku:sku,
+      sales:sales, cost:cost, profit:profit,
+      margin:sales.map(function(s,i){var denom=profit[i]+cost[i];return denom!==0?profit[i]/denom:null;}),
+      buyBoxPct: buyBox,
+      available: inv?(+inv.available||0):0,
+      daysOfSupply: inv?(+inv.daysOfSupply||0):0,
+      assetValue: inv?(+inv.assetValue||0):0
+    };
+  });
+
+  var byBrand={};
+  Object.values(skuData).forEach(function(s){
+    var m=mappingData.find(function(x){return x.sku===s.sku;});
+    var brand=m?(m.brand||'Unassigned'):'Unmapped';
+    var title=m?m.title:'';
+    if(brandFilter && brand!==brandFilter)return;
+    if(!byBrand[brand])byBrand[brand]={brand:brand,sales:[0,0,0],cost:[0,0,0],profit:[0,0,0],available:0,assetValue:0,skus:[]};
+    for(var i=0;i<3;i++){
+      byBrand[brand].sales[i]+=s.sales[i];
+      byBrand[brand].cost[i]+=s.cost[i];
+      byBrand[brand].profit[i]+=s.profit[i];
+    }
+    byBrand[brand].available+=s.available;
+    byBrand[brand].assetValue+=s.assetValue;
+    byBrand[brand].skus.push({sku:s.sku,title:title,sales:s.sales,cost:s.cost,profit:s.profit,margin:s.margin,buyBoxPct:s.buyBoxPct,available:s.available,daysOfSupply:s.daysOfSupply,assetValue:s.assetValue});
+  });
+
+  function marginOf(sales,cost,profit,i){
+    var denom=profit[i]+cost[i];
+    return denom!==0?profit[i]/denom:null;
+  }
+  function chg(curr,prev){
+    return {abs:curr-prev, pct: prev!==0?(curr-prev)/Math.abs(prev):null};
+  }
+
+  var brands=Object.values(byBrand).sort(function(a,b){return b.sales[0]-a.sales[0];});
+  var totalSales=[0,0,0],totalCost=[0,0,0],totalProfit=[0,0,0],totalAvailable=0,totalAsset=0;
+  brands.forEach(function(b){
+    for(var i=0;i<3;i++){totalSales[i]+=b.sales[i];totalCost[i]+=b.cost[i];totalProfit[i]+=b.profit[i];}
+    totalAvailable+=b.available; totalAsset+=b.assetValue;
+  });
+  var totalMargin0=marginOf(totalSales,totalCost,totalProfit,0);
+
+  // KPIs (based on P1 / current period)
+  var momChg=chg(totalSales[0],totalSales[1]);
+  var yoyChg=chg(totalSales[0],totalSales[2]);
+  document.getElementById('roi-kpis').innerHTML=
+    '<div class="kpi"><p>'+(mode==='weekly'?'This week':'Est. this month')+' sales</p><h2>'+fmtRev(totalSales[0])+'</h2></div>'+
+    '<div class="kpi"><p>Profit</p><h2 class="'+(totalProfit[0]>=0?'green':'red')+'">'+fmtRev(totalProfit[0])+'</h2></div>'+
+    '<div class="kpi"><p>Margin</p><h2 class="'+(totalMargin0!==null&&totalMargin0>=0.2?'green':totalMargin0!==null&&totalMargin0>=0?'amber':'red')+'">'+(totalMargin0!==null?(totalMargin0*100).toFixed(1)+'%':'—')+'</h2></div>'+
+    '<div class="kpi"><p>vs '+(mode==='weekly'?'last period':'last month')+'</p><h2 class="'+(momChg.abs>=0?'green':'red')+'">'+(momChg.pct!==null?(momChg.pct*100).toFixed(1)+'%':'—')+'</h2></div>'+
+    '<div class="kpi"><p>vs same period last year</p><h2 class="'+(yoyChg.abs>=0?'green':'red')+'">'+(yoyChg.pct!==null?(yoyChg.pct*100).toFixed(1)+'%':'—')+'</h2></div>'+
+    '<div class="kpi"><p>Asset value</p><h2>'+fmtRev(totalAsset)+'</h2></div>';
+
+  var modeNote = mode==='weekly'
+    ? 'Weekly view: '+esc(periods[0])+' shown as-is; '+esc(periods[1])+' and '+esc(periods[2])+' shown as average-per-7-days.'
+    : 'Monthly view: all periods normalized to a 30-day equivalent. '+esc(periods[0])+' (7 days) scaled ×30/7; '+esc(periods[1])+' and '+esc(periods[2])+' scaled to 30 days by their actual day counts.';
+  document.getElementById('roi-period-info').textContent=modeNote;
+
+  var th=document.getElementById('roi-thead');
+  th.innerHTML='<th data-w="180">Brand / SKU</th><th data-w="340">Description</th>'+
+    '<th class="num" data-w="120">'+esc(colLabels[0])+'</th><th class="num" data-w="120">'+esc(colLabels[1])+'</th><th class="num" data-w="120">'+esc(colLabels[2])+'</th>'+
+    '<th class="num" data-w="100">Chg $ (vs P2)</th><th class="num" data-w="100">Chg % (vs P2)</th>'+
+    '<th class="num" data-w="100">Chg $ (vs P3)</th><th class="num" data-w="100">Chg % (vs P3)</th>'+
+    '<th class="num" data-w="100">Margin '+esc(periods[0])+'</th><th class="num" data-w="100">Margin '+esc(periods[1])+'</th><th class="num" data-w="100">Margin '+esc(periods[2])+'</th>'+
+    '<th class="num" data-w="70">Buy Box % '+esc(periods[0])+'</th><th class="num" data-w="70">Buy Box % '+esc(periods[1])+'</th><th class="num" data-w="70">Buy Box % '+esc(periods[2])+'</th>';
+
+  function pctCell(p){
+    if(p===null) return '<td class="num">—</td>';
+    var cls=p>=0?'green':'red';
+    return '<td class="num '+cls+'">'+(p*100).toFixed(1)+'%</td>';
+  }
+  function dollarChgCell(v){
+    var cls=v>=0?'green':'red';
+    return '<td class="num '+cls+'">'+fmtRev(v)+'</td>';
+  }
+  function marginCell(m){
+    if(m===null) return '<td class="num">—</td>';
+    var cls=m>=0.2?'green':m>=0?'amber':'red';
+    return '<td class="num '+cls+'">'+(m*100).toFixed(1)+'%</td>';
+  }
+  function buyBoxCell(v){
+    if(v===null||v===undefined) return '<td class="num">—</td>';
+    return '<td class="num">'+(+v).toFixed(0)+'%</td>';
+  }
+
+  var rows='';
+  brands.forEach(function(brand){
+    var isOpen=!!roiExpanded[brand.brand];
+    var mom=chg(brand.sales[0],brand.sales[1]);
+    var yoy=chg(brand.sales[0],brand.sales[2]);
+    var m0=marginOf(brand.sales,brand.cost,brand.profit,0);
+    var m1=marginOf(brand.sales,brand.cost,brand.profit,1);
+    var m2=marginOf(brand.sales,brand.cost,brand.profit,2);
+
+    rows+='<tr class="sales-brand-row'+(isOpen?' open-brand':'')+'" onclick="toggleRoiBrand(\''+esc(brand.brand)+'\')" data-roibrand="'+esc(brand.brand)+'">';
+    rows+='<td><span class="brand-toggle">'+(isOpen?'▼':'▶')+'</span>'+esc(brand.brand)+'</td>';
+    rows+='<td></td>';
+    rows+='<td class="num">'+fmtRev(brand.sales[0])+'</td>';
+    rows+='<td class="num">'+fmtRev(brand.sales[1])+'</td>';
+    rows+='<td class="num">'+fmtRev(brand.sales[2])+'</td>';
+    rows+=dollarChgCell(mom.abs);
+    rows+=pctCell(mom.pct);
+    rows+=dollarChgCell(yoy.abs);
+    rows+=pctCell(yoy.pct);
+    rows+=marginCell(m0);
+    rows+=marginCell(m1);
+    rows+=marginCell(m2);
+    var bbAvg=[0,1,2].map(function(i){
+      var vals=brand.skus.map(function(s){return s.buyBoxPct[i];}).filter(function(v){return v!==null&&v!==undefined;});
+      return vals.length?(sum(vals)/vals.length):null;
+    });
+    rows+=buyBoxCell(bbAvg[0])+buyBoxCell(bbAvg[1])+buyBoxCell(bbAvg[2]);
+    rows+='</tr>';
+
+    brand.skus.sort(function(a,b){return b.sales[0]-a.sales[0];}).forEach(function(s){
+      var smom=chg(s.sales[0],s.sales[1]);
+      var syoy=chg(s.sales[0],s.sales[2]);
+      rows+='<tr class="sales-sku-row'+(isOpen?' visible':'')+'" data-roibrand="'+esc(brand.brand)+'">';
+      rows+='<td><span style="color:#185FA5;font-size:11px">'+esc(s.sku)+'</span></td>';
+      rows+='<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(s.title||'')+'">'+esc(s.title||'')+'</td>';
+      rows+='<td class="num">'+fmtRev(s.sales[0])+'</td>';
+      rows+='<td class="num">'+fmtRev(s.sales[1])+'</td>';
+      rows+='<td class="num">'+fmtRev(s.sales[2])+'</td>';
+      rows+=dollarChgCell(smom.abs);
+      rows+=pctCell(smom.pct);
+      rows+=dollarChgCell(syoy.abs);
+      rows+=pctCell(syoy.pct);
+      rows+=marginCell(s.margin[0]);
+      rows+=marginCell(s.margin[1]);
+      rows+=marginCell(s.margin[2]);
+      rows+=buyBoxCell(s.buyBoxPct[0])+buyBoxCell(s.buyBoxPct[1])+buyBoxCell(s.buyBoxPct[2]);
+      rows+='</tr>';
+    });
+  });
+
+  document.getElementById('roi-body').innerHTML=rows;
+  makeResizable('roi-table');
+}
+
+function toggleRoiBrand(brand){
+  roiExpanded[brand]=!roiExpanded[brand];
+  document.querySelectorAll('[data-roibrand="'+brand+'"]').forEach(function(row){
+    if(row.classList.contains('sales-brand-row')){
+      row.classList.toggle('open-brand',!!roiExpanded[brand]);
+      var t=row.querySelector('.brand-toggle');
+      if(t)t.textContent=roiExpanded[brand]?'▼':'▶';
+    }else{
+      row.classList.toggle('visible',!!roiExpanded[brand]);
+    }
+  });
+}
+
+function exportRoi(){
+  if(!compReportData||!compReportData.periods||compReportData.periods.length<3){alert('Upload a Comparison Report first.');return;}
+  var mode=document.getElementById('roi-mode').value;
+  var brandFilter=document.getElementById('roi-brand-filter').value;
+  var periods=compReportData.periods.slice(0,3);
+  var dayCounts=periods.map(periodDayCount);
+
+  var invBySku={};
+  invReportData.forEach(function(inv){ invBySku[inv.sku]=inv; });
+
+  var rows=[];
+  Object.keys(compReportData.data).forEach(function(sku){
+    var metrics=compReportData.data[sku];
+    function metricArr(name){
+      return periods.map(function(p,i){
+        var raw=metrics[name]?(metrics[name][p]||0):0;
+        return normalizeValue(raw,i,mode,dayCounts);
+      });
+    }
+    var sales=metricArr('Sales');
+    var cost=metricArr('Cost');
+    var profit=metricArr('Profit');
+    var margin=sales.map(function(s,i){var denom=profit[i]+cost[i];return denom!==0?profit[i]/denom:null;});
+    var buyBox=periods.map(function(p){
+      var v=metrics['Buy Box %']?metrics['Buy Box %'][p]:null;
+      return (v===undefined||v===null)?null:v;
+    });
+
+    var m=mappingData.find(function(x){return x.sku===sku;});
+    var brand=m?(m.brand||'Unassigned'):'Unmapped';
+    if(brandFilter && brand!==brandFilter)return;
+    var inv=invBySku[sku];
+
+    rows.push({
+      'Brand': brand,
+      'SKU': sku,
+      'Title': m?m.title:'',
+      'Sales P1': +sales[0].toFixed(2),
+      'Sales P2': +sales[1].toFixed(2),
+      'Sales P3': +sales[2].toFixed(2),
+      'MoM $ Chg': +(sales[0]-sales[1]).toFixed(2),
+      'MoM % Chg': sales[1]!==0?+((sales[0]-sales[1])/Math.abs(sales[1])*100).toFixed(1):'',
+      'YoY $ Chg': +(sales[0]-sales[2]).toFixed(2),
+      'YoY % Chg': sales[2]!==0?+((sales[0]-sales[2])/Math.abs(sales[2])*100).toFixed(1):'',
+      'Margin P1 %': margin[0]!==null?+(margin[0]*100).toFixed(1):'',
+      'Margin P2 %': margin[1]!==null?+(margin[1]*100).toFixed(1):'',
+      'Margin P3 %': margin[2]!==null?+(margin[2]*100).toFixed(1):'',
+      'Buy Box % P1': buyBox[0]!==null?+(+buyBox[0]).toFixed(0):'',
+      'Buy Box % P2': buyBox[1]!==null?+(+buyBox[1]).toFixed(0):'',
+      'Buy Box % P3': buyBox[2]!==null?+(+buyBox[2]).toFixed(0):'',
+      'Available': inv?(+inv.available||0):0,
+      'Days of Supply': inv?(+inv.daysOfSupply||0):0,
+      'Asset Value': inv?+(+inv.assetValue||0).toFixed(2):0
+    });
+  });
+  exportXlsx(rows,'Sales_ROI_'+mode+'_'+new Date().toISOString().split('T')[0]);
+}
+
+// ── Product mapping table ──
+function addMappingRow(){
+  mappingData.unshift({active:'Active',brand:'',asin:'',sku:'',odSku:'',title:'',eaches:'',fba:'',category:''});
+  localStorage.setItem('amz_mapping',JSON.stringify(mappingData));
+  populateMappingBrandFilter(); populateRoiBrandFilter();
+  mapPage=0;
+  renderMappingTable();
+}
+
+function cell(idx,field,width){
+  var val=mappingData[idx][field]||'';
+  return '<td><input style="width:'+width+'px;border:1px solid #ddd;border-radius:4px;padding:2px 6px;font-size:12px;background:#fff" value="'+esc(val)+'" onchange="mappingData['+idx+'].'+field+'=this.value;localStorage.setItem(\'amz_mapping\',JSON.stringify(mappingData));if(\''+field+'\'===\'brand\'){populateMappingBrandFilter();populateRoiBrandFilter();}"></td>';
+}
+
+function renderMappingTable(){
+  var search=(document.getElementById('map-search').value||'').toLowerCase();
+  var brandFilter=document.getElementById('map-brand').value;
+  var fbaFilter=document.getElementById('map-fba').value;
+
+  var filtered=mappingData.map(function(r,i){return{r:r,i:i};}).filter(function(x){
+    var r=x.r;
+    if(brandFilter && r.brand!==brandFilter) return false;
+    if(fbaFilter && r.fba!==fbaFilter) return false;
+    if(search){
+      var hay=(r.asin+' '+r.sku+' '+r.title+' '+r.odSku+' '+r.brand).toLowerCase();
+      if(hay.indexOf(search)===-1) return false;
+    }
+    return true;
+  });
+
+  var pages=Math.max(1,Math.ceil(filtered.length/PAGE));
+  if(mapPage<0)mapPage=0;
+  if(mapPage>=pages)mapPage=pages-1;
+  var pageItems=filtered.slice(mapPage*PAGE,(mapPage+1)*PAGE);
+
+  var rows='';
+  pageItems.forEach(function(x){
+    var i=x.i, r=x.r;
+    rows+='<tr>';
+    rows+='<td><select style="font-size:12px;padding:2px 4px;border:1px solid #ddd;border-radius:4px" onchange="mappingData['+i+'].active=this.value;localStorage.setItem(\'amz_mapping\',JSON.stringify(mappingData))">'+
+      '<option value="Active"'+((r.active||'Active')==='Active'?' selected':'')+'>Active</option>'+
+      '<option value="Inactive"'+(r.active==='Inactive'?' selected':'')+'>Inactive</option></select></td>';
+    rows+=cell(i,'brand',90);
+    rows+=cell(i,'asin',100);
+    rows+=cell(i,'sku',100);
+    rows+=cell(i,'odSku',90);
+    rows+=cell(i,'title',180);
+    rows+=cell(i,'eaches',60);
+    rows+=cell(i,'fba',80);
+    rows+=cell(i,'category',100);
+    rows+='<td><button onclick="if(confirm(\'Remove this row?\')){mappingData.splice('+i+',1);localStorage.setItem(\'amz_mapping\',JSON.stringify(mappingData));renderMappingTable();}" style="font-size:11px;color:#A32D2D;background:none;border:none;cursor:pointer">&#10005;</button></td>';
+    rows+='</tr>';
+  });
+  document.getElementById('mapping-body').innerHTML=rows || '<tr><td colspan="10" style="text-align:center;padding:1rem;color:#888">No rows match your filters.</td></tr>';
+  document.getElementById('map-page-info').textContent='Page '+(mapPage+1)+' of '+pages;
+  document.getElementById('map-prev').disabled=mapPage===0;
+  document.getElementById('map-next').disabled=mapPage>=pages-1;
+  document.getElementById('mapping-count').textContent=filtered.length+' rows';
+}
+
+// ── OD inventory table ──
+function renderODTable(){
+  var search=(document.getElementById('od-search').value||'').toLowerCase();
+  var brandFilter=document.getElementById('od-brand-filter').value;
+  var famFilter=document.getElementById('od-family-filter').value;
+  var stockFilter=document.getElementById('od-stock-filter').value;
+
+  var filtered=odData.filter(function(r){
+    if(brandFilter && r.brand!==brandFilter) return false;
+    if(famFilter && r.family!==famFilter) return false;
+    var av=+r.available||0;
+    if(stockFilter==='low' && !(av<1000)) return false;
+    if(stockFilter==='ok' && !(av>=1000)) return false;
+    if(search){
+      var hay=(r.sku+' '+r.description+' '+r.brand).toLowerCase();
+      if(hay.indexOf(search)===-1) return false;
+    }
+    return true;
+  });
+
+  var totalAvail=sum(filtered.map(function(r){return +r.available||0;}));
+  var totalAsset=sum(filtered.map(function(r){return (+r.available||0)*(+r.avgCost||0);}));
+  var lowCount=filtered.filter(function(r){return (+r.available||0)<1000;}).length;
+  document.getElementById('od-kpis-wrap').innerHTML=
+    '<div class="kpi-grid">'+
+    '<div class="kpi"><p>Total available</p><h2>'+totalAvail.toLocaleString()+'</h2></div>'+
+    '<div class="kpi"><p>Total asset value</p><h2>'+fmtRev(totalAsset)+'</h2></div>'+
+    '<div class="kpi"><p>SKUs shown</p><h2>'+filtered.length+'</h2></div>'+
+    '<div class="kpi"><p>Low stock (&lt;1000)</p><h2 class="'+(lowCount>0?'red':'green')+'">'+lowCount+'</h2></div>'+
+    '</div>';
+
+  var pages=Math.max(1,Math.ceil(filtered.length/PAGE));
+  if(odPage<0)odPage=0;
+  if(odPage>=pages)odPage=pages-1;
+  var pageItems=filtered.slice(odPage*PAGE,(odPage+1)*PAGE);
+
+  var rows=pageItems.map(function(r){
+    var linked=mappingData.filter(function(m){return m.odSku===r.sku;});
+    var asins=[...new Set(linked.map(function(m){return m.asin;}).filter(Boolean))];
+    var titles=[...new Set(linked.map(function(m){return m.title;}).filter(Boolean))];
+    var asinHtml=asins.length?asins.map(function(a){return '<span style="font-size:11px;color:#185FA5">'+esc(a)+'</span>';}).join('<br>'):'<span style="color:#ccc;font-size:11px">—</span>';
+    var titleHtml=titles.length?'<span style="font-size:11px">'+esc(titles[0])+(titles.length>1?' <span style="color:#888">(+'+(titles.length-1)+' more)</span>':'')+'</span>':'<span style="color:#ccc;font-size:11px">—</span>';
+    var av=+r.available||0;
+    var avColor=av<1000?'#A32D2D':av<5000?'#854F0B':'#3B6D11';
+    return '<tr>'+
+      '<td><span class="badge badge-gray">'+esc(r.brand)+'</span></td>'+
+      '<td style="font-size:12px;font-weight:500">'+esc(r.sku)+'</td>'+
+      '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="'+esc(r.description)+'">'+esc(r.description)+'</td>'+
+      '<td style="font-size:12px;color:#888">'+esc(r.family)+'</td>'+
+      '<td style="font-weight:500;color:'+avColor+'">'+av.toLocaleString()+'</td>'+
+      '<td>'+(+r.onHand||0).toLocaleString()+'</td>'+
+      '<td>'+(+r.onPO||0).toLocaleString()+'</td>'+
+      '<td style="font-size:12px;color:#888">$'+(+r.avgCost||0).toFixed(2)+'</td>'+
+      '<td>'+asinHtml+'</td>'+
+      '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(titles[0]||'')+'">'+titleHtml+'</td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('od-body').innerHTML=rows || '<tr><td colspan="10" style="text-align:center;padding:1rem;color:#888">No rows match your filters.</td></tr>';
+  document.getElementById('od-page-info').textContent='Page '+(odPage+1)+' of '+pages;
+  document.getElementById('od-prev').disabled=odPage===0;
+  document.getElementById('od-next').disabled=odPage>=pages-1;
+  document.getElementById('od-count').textContent=filtered.length+' rows';
+}
+
+// Extract a positive quantity from a value that may include text (e.g. "CS6", "6 units").
+// Defaults to 1 if no number is found or the number is 0 (matches the original report's .fillna(1) behavior).
+function extractQty(v){
+  if(v===undefined||v===null||v==='') return 1;
+  var m=String(v).match(/[\d.]+/);
+  if(!m) return 1;
+  var n=parseFloat(m[0]);
+  return (isNaN(n)||n===0)?1:n;
+}
+
+// Derive OD Unit Qty from Primary Sale Unit / Primary Units Type
+// (matches the original report's od_unit_qty() logic):
+// - If Primary Sale Unit is "Case"/"Cases", parse the number after "CS" in Primary Units Type (e.g. "CS6" -> 6)
+// - Otherwise, OD Unit Qty = 1
+function deriveOdUnitQty(od){
+  if(!od) return 1;
+  var saleUnit=String(od.primarySaleUnit||'').trim().toLowerCase();
+  if(saleUnit==='case'||saleUnit==='cases'){
+    var m=String(od.primaryUnitsType||'').match(/CS\s*(\d+)/i);
+    return m?(parseInt(m[1],10)||1):1;
+  }
+  return 1;
+}
+
+// ── Shipment by SKU (computed from mapping + inventory + OD + comparison report) ──
+function computeShipmentData(){
+  if(!mappingData.length) return [];
+  var p1=compReportData&&compReportData.periods&&compReportData.periods.length?compReportData.periods[0]:null;
+
+  var invBySku={};
+  invReportData.forEach(function(inv){ invBySku[inv.sku]=inv; });
+  var odBySku={};
+  odData.forEach(function(o){ odBySku[o.sku]=o; });
+  var plBySku={};
+  plReportData.forEach(function(p){ plBySku[p.sku]=p; });
+
+  function dosBucket(d){
+    if(d<=30) return '0-30';
+    if(d<=60) return '31-60';
+    if(d<=90) return '61-90';
+    if(d<=120) return '91-120';
+    return '120+';
+  }
+
+  return mappingData.map(function(m){
+    if(!m.sku) return null;
+    // Exclude "Seller" shipment type (matches Python script's category filter)
+    var category=m.category||'';
+    if(category.toLowerCase()==='seller') return null;
+
+    var inv=invBySku[m.sku]||{};
+    var od=odBySku[m.odSku]||{};
+    var metrics=(compReportData&&compReportData.data&&p1)?
+      (compReportData.data[m.sku]||{}):{};
+
+    var amazonTotal=+inv.total||0;
+    var amazonInbound=+inv.inbound||0;
+    var daysOfSupply=+inv.daysOfSupply||0;
+    var amazonEaches=extractQty(m.eaches);
+    var odUnitQty=deriveOdUnitQty(od);
+    var odOnHand=+od.available||0;
+    var odOnPO=+od.onPO||0;
+
+    var amzOdUnits=Math.round(amazonTotal*amazonEaches/odUnitQty);
+    var odAvailAmz=Math.round(odOnHand*odUnitQty/amazonEaches);
+
+    var pl=plBySku[m.sku];
+    var sales30, cost, profit, gp;
+    if(pl){
+      // Use PL report: Sales Qty directly, GP = Profit/(Profit+Cost)
+      sales30=Math.round(pl.salesQty||0);
+      cost=pl.cost||0;
+      profit=pl.profit||0;
+    }else{
+      // Fallback to comparison report P1
+      var salesQtyP1=metrics['Sales Qty']?(+metrics['Sales Qty'][p1]||0):0;
+      sales30=Math.round(salesQtyP1*(30/7));
+      cost=metrics['Cost']?(+metrics['Cost'][p1]||0):0;
+      profit=metrics['Profit']?(+metrics['Profit'][p1]||0):0;
+    }
+    var denom=profit+cost;
+    gp=denom!==0?(profit/denom):null;
+    var suggestedSend=Math.max(0,Math.round(sales30-amazonTotal));
+
+    return{
+      sku:m.sku, asin:m.asin, title:m.title, brand:m.brand||'Unassigned', active:m.active||'Active',
+      shipType:category, dosBucket:dosBucket(daysOfSupply),
+      amazonTotal:amazonTotal, amazonInbound:amazonInbound, amzOdUnits:amzOdUnits,
+      sales30:sales30, zeroSales:(sales30===0?'No Sales':''),
+      odAvailAmz:odAvailAmz, odAvail:odOnHand,
+      gp:gp,
+      odSku:m.odSku||'', amazonEaches:amazonEaches, odUnitQty:odUnitQty
+    };
+  }).filter(Boolean);
+}
+
+function populateShipBrandFilter(){
+  var brands=[...new Set(mappingData.map(function(r){return r.brand;}).filter(Boolean))].sort();
+  var sel=document.getElementById('ship-brand-filter');
+  if(!sel)return;
+  var cur=sel.value;
+  sel.innerHTML='<option value="">All brands</option>';
+  brands.forEach(function(b){sel.innerHTML+='<option value="'+b+'"'+(b===cur?' selected':'')+'>'+b+'</option>';});
+}
+function populateShipCatFilter(){
+  var cats=[...new Set(mappingData.map(function(r){return r.category;}).filter(Boolean))].sort();
+  var sel=document.getElementById('ship-cat-filter');
+  if(!sel)return;
+  var cur=sel.value;
+  sel.innerHTML='<option value="">All categories</option>';
+  cats.forEach(function(c){sel.innerHTML+='<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>';});
+}
+
+function renderShipmentTable(){
+  var empty=document.getElementById('ship-empty');
+  var shipmentData=computeShipmentData();
+  if(!shipmentData.length){
+    empty.style.display='block';
+    document.getElementById('ship-thead').innerHTML='';
+    document.getElementById('ship-body').innerHTML='';
+    document.getElementById('ship-kpis').innerHTML='';
+    return;
+  }
+  empty.style.display='none';
+  populateShipBrandFilter(); populateShipCatFilter();
+
+  var receivedSet=new Set(inboundSkus);
+  var search=(document.getElementById('ship-search').value||'').toLowerCase();
+  var brandFilter=document.getElementById('ship-brand-filter').value;
+  var dosFilter=document.getElementById('ship-dos-filter').value;
+  var zeroFilter=document.getElementById('ship-zero-filter').value;
+  var catFilter=document.getElementById('ship-cat-filter').value;
+  var receivedFilter=document.getElementById('ship-received-filter').value;
+  var activeFilter=document.getElementById('ship-active-filter').value;
+
+  var filtered=shipmentData.filter(function(r){
+    if(brandFilter && r.brand!==brandFilter) return false;
+    if(dosFilter && r.dosBucket!==dosFilter) return false;
+    if(catFilter && r.shipType!==catFilter) return false;
+    if(zeroFilter==='zero' && r.zeroSales!=='No Sales') return false;
+    if(activeFilter && r.active!==activeFilter) return false;
+    var isReceived=receivedSet.has(r.odSku);
+    if(receivedFilter==='yes' && !isReceived) return false;
+    if(receivedFilter==='no' && isReceived) return false;
+    if(search){
+      var hay=(r.sku+' '+r.asin+' '+r.title+' '+r.brand).toLowerCase();
+      if(hay.indexOf(search)===-1) return false;
+    }
+    return true;
+  });
+
+  var zeroCount=filtered.filter(function(r){return r.zeroSales==='No Sales';}).length;
+  var totalSales30=sum(filtered.map(function(r){return r.sales30||0;}));
+  var totalAmzTotal=sum(filtered.map(function(r){return r.amazonTotal||0;}));
+  document.getElementById('ship-kpis').innerHTML=
+    '<div class="kpi"><p>SKUs shown</p><h2>'+filtered.length+'</h2></div>'+
+    '<div class="kpi"><p>30 day sales (units)</p><h2>'+totalSales30.toLocaleString()+'</h2></div>'+
+    '<div class="kpi"><p>Amazon total (units)</p><h2>'+totalAmzTotal.toLocaleString()+'</h2></div>'+
+    '<div class="kpi"><p>Zero-sales SKUs</p><h2 class="'+(zeroCount>0?'red':'green')+'">'+zeroCount+'</h2></div>';
+
+  var th=document.getElementById('ship-thead');
+  // Build ASIN duplicate count map — SKU is red if its ASIN has >1 SKU in mapping
+  var asinCount={};
+  mappingData.forEach(function(m){
+    if(!m.asin) return;
+    asinCount[m.asin]=(asinCount[m.asin]||0)+1;
+  });
+
+  th.innerHTML='<th data-w="110">ASIN</th><th data-w="120">SKU</th><th data-w="100">Brand</th><th data-w="100">Category</th><th data-w="280">Description</th>'+
+    '<th data-w="90">DOS Bucket</th>'+
+    '<th class="num" data-w="90">Amazon Total</th><th class="num" data-w="90">Amazon Inbound</th><th class="num" data-w="100">AMZ Total (OD Units)</th>'+
+    '<th class="num" data-w="90">30 Day Sales</th><th class="num" data-w="80">Zero Sales</th>'+
+    '<th class="num" data-w="100">OD Available (AMZ Qty)</th><th class="num" data-w="90">OD Available</th>'+
+    '<th class="num" data-w="70">GP</th>'+
+    '<th data-w="90">OD SKU</th><th class="num" data-w="80">Amazon Eaches</th><th class="num" data-w="80">OD Unit Qty</th>'+
+    '<th data-w="90">Received Wk</th>';
+
+  var pages=Math.max(1,Math.ceil(filtered.length/PAGE));
+  if(shipPage<0)shipPage=0;
+  if(shipPage>=pages)shipPage=pages-1;
+  var pageItems=filtered.slice(shipPage*PAGE,(shipPage+1)*PAGE);
+
+  var rows=pageItems.map(function(r){
+    var brand=r.brand;
+    var isZero=r.zeroSales==='No Sales';
+    var dosColor=r.dosBucket==='0-30'?'red':(r.dosBucket==='31-60'?'amber':'');
+    var dupAsin=(asinCount[r.asin]||0)>1;
+    var received=receivedSet.has(r.odSku);
+    return '<tr>'+
+      '<td style="font-size:11px;color:#185FA5">'+esc(r.asin)+'</td>'+
+      '<td style="font-size:12px;font-weight:500;'+(dupAsin?'color:#C00000':'')+'">'+esc(r.sku)+'</td>'+
+      '<td><span class="badge badge-gray">'+esc(brand)+'</span></td>'+
+      '<td style="font-size:12px;color:#555">'+esc(r.shipType||'')+'</td>'+
+      '<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
+      '<td class="'+dosColor+'">'+esc(r.dosBucket)+'</td>'+
+      '<td class="num">'+(r.amazonTotal||0).toLocaleString()+'</td>'+
+      '<td class="num">'+(r.amazonInbound||0).toLocaleString()+'</td>'+
+      '<td class="num">'+(r.amzOdUnits||0).toLocaleString()+'</td>'+
+      '<td class="num">'+(r.sales30||0).toLocaleString()+'</td>'+
+      '<td class="num">'+(isZero?'<span class="badge" style="background:#fcebeb;color:#A32D2D">No Sales</span>':'—')+'</td>'+
+      '<td class="num">'+(r.odAvailAmz||0).toLocaleString()+'</td>'+
+      '<td class="num">'+(r.odAvail||0).toLocaleString()+'</td>'+
+      '<td class="num">'+(r.gp!==null&&r.gp!==undefined&&r.gp!==''?(+r.gp*100).toFixed(1)+'%':'—')+'</td>'+
+      '<td style="font-size:11px;color:#888">'+esc(r.odSku)+'</td>'+
+      '<td class="num">'+(r.amazonEaches||0).toLocaleString()+'</td>'+
+      '<td class="num">'+(r.odUnitQty||0).toLocaleString()+'</td>'+
+      '<td style="text-align:center;font-size:14px">'+(received?'<span style="color:#1D6335;font-weight:700">✓</span>':'')+'</td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('ship-body').innerHTML=rows || '<tr><td colspan="18" style="text-align:center;padding:1rem;color:#888">No rows match your filters.</td></tr>';
+  document.getElementById('ship-page-info').textContent='Page '+(shipPage+1)+' of '+pages;
+  document.getElementById('ship-prev').disabled=shipPage===0;
+  document.getElementById('ship-next').disabled=shipPage>=pages-1;
+  document.getElementById('ship-count').textContent=filtered.length+' rows';
+  makeResizable('ship-table');
+}
+
+// ── Exports ──
+function exportMapping(){
+  var rows=mappingData.map(function(r){
+    return{'Active':r.active||'Active','Brand':r.brand,'ASIN':r.asin,'Amazon SKU':r.sku,'OD SKU':r.odSku,'Amazon Title':r.title,'Eaches':r.eaches,'FBA':r.fba,'Category':r.category};
+  });
+  exportXlsx(rows,'Amazon_Product_Mapping');
+}
+function exportOD(){
+  var rows=odData.map(function(r){
+    var linked=mappingData.filter(function(m){return m.odSku===r.sku;});
+    var asins=[...new Set(linked.map(function(m){return m.asin;}).filter(Boolean))].join(', ');
+    var titles=[...new Set(linked.map(function(m){return m.title;}).filter(Boolean))].join(', ');
+    return{'Brand':r.brand,'OD SKU':r.sku,'Description':r.description,'Category':r.family,'Available':+r.available||0,'On Hand':+r.onHand||0,'On PO':+r.onPO||0,'Avg Cost':+r.avgCost||0,'Purchase Price':+r.purchasePrice||0,'Amazon ASINs':asins,'Amazon Title':titles};
+  });
+  exportXlsx(rows,'OD_Inventory');
+}
+function exportShipment(){
+  var shipmentData=computeShipmentData();
+  var expReceivedSet=new Set(inboundSkus);
+  var brandFilter=document.getElementById('ship-brand-filter').value;
+  var dosFilter=document.getElementById('ship-dos-filter').value;
+  var zeroFilter=document.getElementById('ship-zero-filter').value;
+  var catFilter=document.getElementById('ship-cat-filter').value;
+  var receivedFilter=document.getElementById('ship-received-filter').value;
+  var activeFilter=document.getElementById('ship-active-filter').value;
+  var search=(document.getElementById('ship-search').value||'').toLowerCase();
+
+  var filtered=shipmentData.filter(function(r){
+    if(brandFilter && r.brand!==brandFilter) return false;
+    if(dosFilter && r.dosBucket!==dosFilter) return false;
+    if(catFilter && r.shipType!==catFilter) return false;
+    if(zeroFilter==='zero' && r.zeroSales!=='No Sales') return false;
+    if(activeFilter && r.active!==activeFilter) return false;
+    var isReceived=expReceivedSet.has(r.odSku);
+    if(receivedFilter==='yes' && !isReceived) return false;
+    if(receivedFilter==='no' && isReceived) return false;
+    if(search){
+      var hay=(r.sku+' '+r.asin+' '+r.title+' '+r.brand).toLowerCase();
+      if(hay.indexOf(search)===-1) return false;
+    }
+    return true;
+  });
+
+  var rows=filtered.map(function(r){
+    return{
+      'ASIN':r.asin,'SKU':r.sku,'Brand':r.brand,'Category':r.shipType,'Title':r.title,
+      'DOS Bucket':r.dosBucket,
+      'Amazon Total':r.amazonTotal,'Amazon Inbound':r.amazonInbound,'AMZ Total (OD Units)':r.amzOdUnits,
+      '30 Day Sales':r.sales30,'Zero Sales':r.zeroSales,
+      'OD Available (AMZ Qty)':r.odAvailAmz,'OD Available':r.odAvail,
+      'GP %':(r.gp!==null&&r.gp!==undefined&&r.gp!=='')?+(+r.gp*100).toFixed(1):'',
+      'OD SKU':r.odSku,'Amazon Eaches':r.amazonEaches,'OD Unit Qty':r.odUnitQty,
+      'Received This Week':expReceivedSet.has(r.odSku)?'Yes':''
+    };
+  });
+  exportXlsx(rows,'Shipment_By_SKU');
+}
+function exportXlsx(rows,filename){
+  if(!rows.length){alert('No data to export.');return;}
+  var ws=XLSX.utils.json_to_sheet(rows);
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Data');
+  var cols=Object.keys(rows[0]);
+  ws['!cols']=cols.map(function(k){
+    var max=k.length;
+    rows.forEach(function(r){var v=String(r[k]||'');if(v.length>max)max=v.length;});
+    return{wch:Math.min(max+2,60)};
+  });
+  XLSX.writeFile(wb,filename+'_'+new Date().toISOString().split('T')[0]+'.xlsx');
+}
+
+// ── Helpers ──
+function fmtRev(v){
+  v=+v||0;
+  if(v>=1000000) return '$'+(v/1000000).toFixed(2)+'M';
+  if(v>=1000) return '$'+(v/1000).toFixed(1)+'k';
+  return '$'+v.toFixed(2);
+}
+function esc(v){
+  return String(v===undefined||v===null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function sum(arr){
+  return arr.reduce(function(a,b){return a+(+b||0);},0);
+}
+
+// ── Resizable table columns ──
+function makeResizable(tableId){
+  var table=document.getElementById(tableId);
+  if(!table) return;
+  var ths=table.querySelectorAll('thead th');
+  ths.forEach(function(th,idx){
+    // Apply stored or default width
+    var saved=localStorage.getItem('colw_'+tableId+'_'+idx);
+    var w=saved||th.getAttribute('data-w');
+    if(w) th.style.width=w+'px';
+
+    // Avoid adding duplicate handles
+    if(th.querySelector('.col-resize-handle')) return;
+    if(idx===ths.length-1) return; // no handle on last column
+
+    var handle=document.createElement('div');
+    handle.className='col-resize-handle';
+    th.appendChild(handle);
+
+    var startX,startW;
+    handle.addEventListener('mousedown',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      startX=e.pageX;
+      startW=th.offsetWidth;
+      handle.classList.add('resizing');
+      document.body.style.cursor='col-resize';
+      function onMove(ev){
+        var newW=Math.max(30,startW+(ev.pageX-startX));
+        th.style.width=newW+'px';
+      }
+      function onUp(){
+        document.removeEventListener('mousemove',onMove);
+        document.removeEventListener('mouseup',onUp);
+        handle.classList.remove('resizing');
+        document.body.style.cursor='';
+        localStorage.setItem('colw_'+tableId+'_'+idx,th.offsetWidth);
+      }
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+  });
+}
+
+// ── Init ──
+// Show local cache status first (instant)
+updateUploadStatuses();
+
+populateMappingBrandFilter();
+populateRoiBrandFilter();
+populateODFilters();
+populateShipBrandFilter(); populateShipCatFilter();
+renderMappingTable();
+renderODTable();
+renderRoi();
+renderShipmentTable();
+
+// Then load fresh data from server (async, updates views when done)
+if(serverUrl && serverPwd){
+  loadAllFromServer();
+}else{
+  setSyncStatus('Not connected — click ⚙ to set server URL & password','err');
+}
+
+</script>
+</body>
+</html>

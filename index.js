@@ -1,5 +1,6 @@
 const express = require('express');
 const cors    = require('cors');
+const path    = require('path');
 const { Pool } = require('pg');
 
 const app  = express();
@@ -46,13 +47,15 @@ function auth(req, res) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-// Health check
+// Serve dashboard
 app.get('/', (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'Store Health Tracker API',
-    pwd_configured: true,
-  });
+  // If browser request, serve the dashboard HTML
+  const accept = req.headers.accept || '';
+  if (accept.includes('text/html')) {
+    return res.sendFile(path.join(__dirname, 'dashboard.html'));
+  }
+  // Otherwise return API health check
+  res.json({ status: 'ok', service: 'Store Health Tracker API', pwd_configured: true });
 });
 
 // Temp debug
