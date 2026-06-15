@@ -1187,7 +1187,7 @@ function renderRoi(){
   document.getElementById('roi-period-info').textContent=modeNote;
 
   var th=document.getElementById('roi-thead');
-  var roiCols=['Brand / SKU','Description','P1 Sales','P2 Sales','P3 Sales','Chg $ (vs P2)','Chg % (vs P2)','Chg $ (vs P3)','Chg % (vs P3)','Margin P1','Margin P2','Margin P3','Buy Box P1','Buy Box P2','Buy Box P3'];
+  var roiCols=['Brand / SKU','Description','P1 Sales','P2 Sales','P3 Sales','Chg $ (vs P2)','Chg % (vs P2)','Chg $ (vs P3)','Chg % (vs P3)','Margin P1','Margin P2','Margin P3','Buy Box P1','Buy Box P2','Buy Box P3','Comment'];
   colVisInit('roi', roiCols);
   document.getElementById('colvis-roi-panel').innerHTML=colVisPanel('roi', roiCols);
   var RO='roi';
@@ -1197,7 +1197,8 @@ function renderRoi(){
     thIf(RO,'Chg $ (vs P2)','<th class="num" data-w="100">Chg $ (vs P2)</th>')+thIf(RO,'Chg % (vs P2)','<th class="num" data-w="100">Chg % (vs P2)</th>')+
     thIf(RO,'Chg $ (vs P3)','<th class="num" data-w="100">Chg $ (vs P3)</th>')+thIf(RO,'Chg % (vs P3)','<th class="num" data-w="100">Chg % (vs P3)</th>')+
     thIf(RO,'Margin P1','<th class="num" data-w="100">Margin '+esc(periods[0])+'</th>')+thIf(RO,'Margin P2','<th class="num" data-w="100">Margin '+esc(periods[1])+'</th>')+thIf(RO,'Margin P3','<th class="num" data-w="100">Margin '+esc(periods[2])+'</th>')+
-    thIf(RO,'Buy Box P1','<th class="num" data-w="70">Buy Box % '+esc(periods[0])+'</th>')+thIf(RO,'Buy Box P2','<th class="num" data-w="70">Buy Box % '+esc(periods[1])+'</th>')+thIf(RO,'Buy Box P3','<th class="num" data-w="70">Buy Box % '+esc(periods[2])+'</th>');
+    thIf(RO,'Buy Box P1','<th class="num" data-w="70">Buy Box % '+esc(periods[0])+'</th>')+thIf(RO,'Buy Box P2','<th class="num" data-w="70">Buy Box % '+esc(periods[1])+'</th>')+thIf(RO,'Buy Box P3','<th class="num" data-w="70">Buy Box % '+esc(periods[2])+'</th>')+
+    thIf(RO,'Comment','<th data-w="160">Comment</th>');
 
   function pctCell(p){
     if(p===null) return '<td class="num">—</td>';
@@ -1248,75 +1249,45 @@ function renderRoi(){
     if(colVisible(RO,'Buy Box P1')) rows+=buyBoxCell(bbAvg[0]);
     if(colVisible(RO,'Buy Box P2')) rows+=buyBoxCell(bbAvg[1]);
     if(colVisible(RO,'Buy Box P3')) rows+=buyBoxCell(bbAvg[2]);
+    if(colVisible(RO,'Comment')) rows+='<td></td>';
     rows+='</tr>';
 
-    // Group SKUs by ASIN
-    var byAsin={};
-    var asinOrder=[];
-    brand.skus.forEach(function(s){
-      var asin=s.asin||'__noasin__';
-      if(!byAsin[asin]){ byAsin[asin]={asin:s.asin||'',skus:[],sales:[0,0,0],profit:[0,0,0],cost:[0,0,0]}; asinOrder.push(asin); }
-      byAsin[asin].skus.push(s);
-      for(var i=0;i<3;i++){
-        byAsin[asin].sales[i]+=s.sales[i];
-        byAsin[asin].profit[i]+=s.profit[i];
-        byAsin[asin].cost[i]+=s.cost[i];
-      }
+    // Sort SKUs: ASIN alphabetically first, then SKU alphabetically within ASIN
+    var sortedSkus=brand.skus.slice().sort(function(a,b){
+      var ac=String(a.asin||'').localeCompare(String(b.asin||''));
+      if(ac!==0) return ac;
+      return String(a.sku||'').localeCompare(String(b.sku||''));
     });
-    asinOrder.sort(function(a,b){ return String(byAsin[a].asin).localeCompare(String(byAsin[b].asin)); });
 
-    asinOrder.forEach(function(asinKey){
-      var ag=byAsin[asinKey];
-      var asinLabel=ag.asin||'No ASIN';
-      var amom=chg(ag.sales[0],ag.sales[1]);
-      var ayoy=chg(ag.sales[0],ag.sales[2]);
-      var am0=marginOf(ag.sales,ag.cost,ag.profit,0);
-      var am1=marginOf(ag.sales,ag.cost,ag.profit,1);
-      var am2=marginOf(ag.sales,ag.cost,ag.profit,2);
-      var multiSku=ag.skus.length>1;
+    // Count how many times each ASIN appears (for red SKU highlight)
+    var asinSkuCount={};
+    sortedSkus.forEach(function(s){ asinSkuCount[s.asin||'']=(asinSkuCount[s.asin||'']||0)+1; });
 
-      // ASIN sub-row (only show if open)
-      rows+='<tr class="sales-sku-row'+(isOpen?' visible':'')+'" data-roibrand="'+esc(brand.brand)+'" style="background:#f8f8f6">';
-      rows+=tdIf(RO,'Brand / SKU','<td style="padding-left:20px;font-weight:600;font-size:11px">'+asinLink(ag.asin)+(multiSku?' <span style="color:#888;font-weight:400">('+ag.skus.length+' SKUs)</span>':'')+'</td>');
-      rows+=tdIf(RO,'Description','<td></td>');
-      rows+=tdIf(RO,'P1 Sales','<td class="num">'+fmtRev(ag.sales[0])+'</td>');
-      rows+=tdIf(RO,'P2 Sales','<td class="num">'+fmtRev(ag.sales[1])+'</td>');
-      rows+=tdIf(RO,'P3 Sales','<td class="num">'+fmtRev(ag.sales[2])+'</td>');
-      if(colVisible(RO,'Chg $ (vs P2)')) rows+=dollarChgCell(amom.abs);
-      if(colVisible(RO,'Chg % (vs P2)')) rows+=pctCell(amom.pct);
-      if(colVisible(RO,'Chg $ (vs P3)')) rows+=dollarChgCell(ayoy.abs);
-      if(colVisible(RO,'Chg % (vs P3)')) rows+=pctCell(ayoy.pct);
-      if(colVisible(RO,'Margin P1')) rows+=marginCell(am0);
-      if(colVisible(RO,'Margin P2')) rows+=marginCell(am1);
-      if(colVisible(RO,'Margin P3')) rows+=marginCell(am2);
-      if(colVisible(RO,'Buy Box P1')) rows+='<td></td>';
-      if(colVisible(RO,'Buy Box P2')) rows+='<td></td>';
-      if(colVisible(RO,'Buy Box P3')) rows+='<td></td>';
+    sortedSkus.forEach(function(s){
+      var smom=chg(s.sales[0],s.sales[1]);
+      var syoy=chg(s.sales[0],s.sales[2]);
+      var dupSku=(asinSkuCount[s.asin||'']||0)>1;
+      rows+='<tr class="sales-sku-row'+(isOpen?' visible':'')+'" data-roibrand="'+esc(brand.brand)+'">';
+      rows+=tdIf(RO,'Brand / SKU','<td style="padding-left:16px">'+
+        (s.asin?'<div style="font-size:10px;margin-bottom:2px">'+asinLink(s.asin)+'</div>':'')+
+        '<div style="'+(dupSku?'color:#C00000;':'')+'">'+skuLink(s.sku)+'</div>'+
+      '</td>');
+      rows+=tdIf(RO,'Description','<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(s.title||'')+'">'+esc(s.title||'')+'</td>');
+      rows+=tdIf(RO,'P1 Sales','<td class="num">'+fmtRev(s.sales[0])+'</td>');
+      rows+=tdIf(RO,'P2 Sales','<td class="num">'+fmtRev(s.sales[1])+'</td>');
+      rows+=tdIf(RO,'P3 Sales','<td class="num">'+fmtRev(s.sales[2])+'</td>');
+      if(colVisible(RO,'Chg $ (vs P2)')) rows+=dollarChgCell(smom.abs);
+      if(colVisible(RO,'Chg % (vs P2)')) rows+=pctCell(smom.pct);
+      if(colVisible(RO,'Chg $ (vs P3)')) rows+=dollarChgCell(syoy.abs);
+      if(colVisible(RO,'Chg % (vs P3)')) rows+=pctCell(syoy.pct);
+      if(colVisible(RO,'Margin P1')) rows+=marginCell(s.margin[0]);
+      if(colVisible(RO,'Margin P2')) rows+=marginCell(s.margin[1]);
+      if(colVisible(RO,'Margin P3')) rows+=marginCell(s.margin[2]);
+      if(colVisible(RO,'Buy Box P1')) rows+=buyBoxCell(s.buyBoxPct[0]);
+      if(colVisible(RO,'Buy Box P2')) rows+=buyBoxCell(s.buyBoxPct[1]);
+      if(colVisible(RO,'Buy Box P3')) rows+=buyBoxCell(s.buyBoxPct[2]);
+      if(colVisible(RO,'Comment')) rows+=commentCell(s.sku);
       rows+='</tr>';
-
-      // SKU rows under this ASIN
-      ag.skus.sort(function(a,b){ return String(a.sku).localeCompare(String(b.sku)); }).forEach(function(s){
-        var smom=chg(s.sales[0],s.sales[1]);
-        var syoy=chg(s.sales[0],s.sales[2]);
-        var dupSku=multiSku; // red if ASIN has >1 SKU
-        rows+='<tr class="sales-sku-row'+(isOpen?' visible':'')+'" data-roibrand="'+esc(brand.brand)+'">';
-        rows+=tdIf(RO,'Brand / SKU','<td style="padding-left:36px;'+(dupSku?'color:#C00000':'')+'">'+skuLink(s.sku)+'</td>');
-        rows+=tdIf(RO,'Description','<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(s.title||'')+'">'+esc(s.title||'')+'</td>');
-        rows+=tdIf(RO,'P1 Sales','<td class="num">'+fmtRev(s.sales[0])+'</td>');
-        rows+=tdIf(RO,'P2 Sales','<td class="num">'+fmtRev(s.sales[1])+'</td>');
-        rows+=tdIf(RO,'P3 Sales','<td class="num">'+fmtRev(s.sales[2])+'</td>');
-        if(colVisible(RO,'Chg $ (vs P2)')) rows+=dollarChgCell(smom.abs);
-        if(colVisible(RO,'Chg % (vs P2)')) rows+=pctCell(smom.pct);
-        if(colVisible(RO,'Chg $ (vs P3)')) rows+=dollarChgCell(syoy.abs);
-        if(colVisible(RO,'Chg % (vs P3)')) rows+=pctCell(syoy.pct);
-        if(colVisible(RO,'Margin P1')) rows+=marginCell(s.margin[0]);
-        if(colVisible(RO,'Margin P2')) rows+=marginCell(s.margin[1]);
-        if(colVisible(RO,'Margin P3')) rows+=marginCell(s.margin[2]);
-        if(colVisible(RO,'Buy Box P1')) rows+=buyBoxCell(s.buyBoxPct[0]);
-        if(colVisible(RO,'Buy Box P2')) rows+=buyBoxCell(s.buyBoxPct[1]);
-        if(colVisible(RO,'Buy Box P3')) rows+=buyBoxCell(s.buyBoxPct[2]);
-        rows+='</tr>';
-      });
     });
   });
 
