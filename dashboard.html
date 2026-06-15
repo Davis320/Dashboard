@@ -1496,60 +1496,74 @@ function computeReorderData(){
   var plBySku={};
   plReportData.forEach(function(r){ plBySku[r.sku]=r; });
 
-  // Build ASIN count for duplicate detection
-  var asinCount={};
-  mappingData.forEach(function(m){ if(m.asin) asinCount[m.asin]=(asinCount[m.asin]||0)+1; });
-
-  return mappingData.map(function(m){
+  // Build per-Amazon-SKU detail rows
+  var detailRows=mappingData.map(function(m){
     var inv=invBySku[m.sku]||{};
     var od=odBySku[m.odSku]||{};
     var pl=plBySku[m.sku]||{};
-
-    // Amazon eaches from mapping
     var amazonEaches=+(m.eaches||1)||1;
-
-    // Case qty from OD primarySaleUnit/primaryUnitsType
     var caseQty=1;
     if(od.primaryUnitsType && String(od.primaryUnitsType).toLowerCase()==='case'){
-      var m2=String(od.primarySaleUnit||'').match(/CS(\d+)/i);
-      if(m2) caseQty=+m2[1];
+      var mx=String(od.primarySaleUnit||'').match(/CS(\d+)/i);
+      if(mx) caseQty=+mx[1];
     }
-
     var amzTotal=+(inv.total||0);
     var dos=+(inv.daysOfSupply||0);
-    var avgDaily= amzTotal && dos ? Math.round(amzTotal/dos*10)/10 : 0;
-    var odAvail=+(od.available||0);
-    var odOnHand=+(od.onHand||0);
-    var odOnPo=+(od.onPO||0);
-    var odPurchasePrice=+(od.purchasePrice||0);
-    var odAvgCost=+(od.avgCost||0);
+    var avgDaily=amzTotal&&dos?Math.round(amzTotal/dos*10)/10:0;
     var salesQty=+(pl.salesQty||0);
     var profit=+(pl.profit||0);
     var cost=+(pl.cost||0);
     var margin=(profit+cost)>0?profit/(profit+cost):0;
-    var brand=od.brand||m.brand||'';
-
     var amzTotalOd=caseQty?Math.round(amzTotal*amazonEaches/caseQty*100)/100:0;
     var salesQtyOd=caseQty?Math.round(salesQty*amazonEaches/caseQty*100)/100:0;
-
     var dosBucket='ok';
-    if(dos>0 && dos<14) dosBucket='critical';
-    else if(dos>=14 && dos<30) dosBucket='low';
-    else if(dos>=30 && dos<=60) dosBucket='medium';
+    if(dos>0&&dos<14) dosBucket='critical';
+    else if(dos>=14&&dos<30) dosBucket='low';
+    else if(dos>=30&&dos<=60) dosBucket='medium';
     else if(dos===0) dosBucket='nodata';
-
     return{
       amzSku:m.sku, odSku:m.odSku||'', title:m.title||'', fba:m.fba||m.category||'',
-      brand:brand,
+      brand:od.brand||m.brand||'',
       amazonEaches:amazonEaches, caseQty:caseQty,
       amzTotal:amzTotal, amzTotalOd:amzTotalOd,
       dos:dos, dosBucket:dosBucket, avgDaily:avgDaily,
-      odAvail:odAvail, odOnHand:odOnHand, odOnPo:odOnPo,
-      odPurchasePrice:odPurchasePrice, odAvgCost:odAvgCost,
+      odAvail:+(od.available||0), odOnHand:+(od.onHand||0), odOnPo:+(od.onPO||0),
+      odPurchasePrice:+(od.purchasePrice||0), odAvgCost:+(od.avgCost||0),
       salesQty:salesQty, salesQtyOd:salesQtyOd, profit:profit, margin:margin
     };
-  }).filter(function(r){ return r.amzSku && (r.amzTotal>0 || r.salesQty>0 || r.odAvail>0); })
-    .sort(function(a,b){ return (a.brand||'').localeCompare(b.brand||'') || (a.odSku||'').localeCompare(b.odSku||''); });
+  }).filter(function(r){ return r.amzSku&&(r.amzTotal>0||r.salesQty>0||r.odAvail>0); });
+
+  // Group by OD SKU
+  var groups={};
+  var groupOrder=[];
+  detailRows.forEach(function(r){
+    var key=r.odSku||('__noOD__'+r.amzSku);
+    if(!groups[key]){
+      groups[key]={
+        odSku:r.odSku, brand:r.brand,
+        odAvail:r.odAvail, odOnHand:r.odOnHand, odOnPo:r.odOnPo,
+        odPurchasePrice:r.odPurchasePrice, odAvgCost:r.odAvgCost,
+        caseQty:r.caseQty,
+        totalAmzTotal:0, totalAmzTotalOd:0, totalSalesQty:0, totalProfit:0,
+        skus:[]
+      };
+      groupOrder.push(key);
+    }
+    var g=groups[key];
+    g.totalAmzTotal+=r.amzTotal;
+    g.totalAmzTotalOd+=r.amzTotalOd;
+    g.totalSalesQty+=r.salesQty;
+    g.totalProfit+=r.profit;
+    g.skus.push(r);
+  });
+
+  // Sort groups by brand then OD SKU
+  groupOrder.sort(function(a,b){
+    var ga=groups[a], gb=groups[b];
+    return (ga.brand||'').localeCompare(gb.brand||'') || (ga.odSku||'').localeCompare(gb.odSku||'');
+  });
+
+  return{groups:groups, groupOrder:groupOrder};
 }
 
 function populateReorderBrandFilter(data){
@@ -1571,35 +1585,47 @@ function populateReorderFbaFilter(data){
 }
 
 function renderReorderTable(){
-  var data=computeReorderData();
-  populateReorderBrandFilter(data);
-  populateReorderFbaFilter(data);
+  var computed=computeReorderData();
+  var groups=computed.groups, groupOrder=computed.groupOrder;
+
+  // Flatten for filter population
+  var allRows=[];
+  groupOrder.forEach(function(k){ groups[k].skus.forEach(function(r){ allRows.push(r); }); });
+
+  populateReorderBrandFilter(allRows);
+  populateReorderFbaFilter(allRows);
+
   var search=(document.getElementById('reorder-search').value||'').toLowerCase();
   var brandFilter=document.getElementById('reorder-brand-filter').value;
   var fbaFilter=document.getElementById('reorder-fba-filter').value;
   var dosFilter=document.getElementById('reorder-dos-filter').value;
 
-  var filtered=data.filter(function(r){
-    if(brandFilter && r.brand!==brandFilter) return false;
-    if(fbaFilter && r.fba!==fbaFilter) return false;
-    if(dosFilter==='critical' && r.dosBucket!=='critical') return false;
-    if(dosFilter==='low' && r.dosBucket!=='low') return false;
-    if(dosFilter==='medium' && r.dosBucket!=='medium') return false;
-    if(dosFilter==='ok' && r.dosBucket!=='ok') return false;
-    if(search){
-      var hay=(r.amzSku+' '+r.odSku+' '+r.title+' '+r.brand).toLowerCase();
-      if(hay.indexOf(search)===-1) return false;
-    }
-    return true;
+  // Filter groups — keep group if any SKU matches
+  var filteredOrder=groupOrder.filter(function(k){
+    var g=groups[k];
+    if(brandFilter && g.brand!==brandFilter) return false;
+    var matchingSkus=g.skus.filter(function(r){
+      if(fbaFilter && r.fba!==fbaFilter) return false;
+      if(dosFilter==='critical' && r.dosBucket!=='critical') return false;
+      if(dosFilter==='low' && r.dosBucket!=='low') return false;
+      if(dosFilter==='medium' && r.dosBucket!=='medium') return false;
+      if(dosFilter==='ok' && r.dosBucket!=='ok') return false;
+      if(search){ var hay=(r.amzSku+' '+r.odSku+' '+r.title+' '+r.brand).toLowerCase(); if(hay.indexOf(search)===-1) return false; }
+      return true;
+    });
+    g._filteredSkus=matchingSkus;
+    return matchingSkus.length>0;
   });
 
   // KPIs
-  var critical=filtered.filter(function(r){return r.dosBucket==='critical';}).length;
-  var low=filtered.filter(function(r){return r.dosBucket==='low';}).length;
-  var totalProfit=filtered.reduce(function(a,r){return a+(r.profit||0);},0);
-  var totalSales=filtered.reduce(function(a,r){return a+(r.salesQty||0);},0);
+  var allFiltered=[]; filteredOrder.forEach(function(k){ allFiltered=allFiltered.concat(groups[k]._filteredSkus); });
+  var critical=allFiltered.filter(function(r){return r.dosBucket==='critical';}).length;
+  var low=allFiltered.filter(function(r){return r.dosBucket==='low';}).length;
+  var totalProfit=allFiltered.reduce(function(a,r){return a+(r.profit||0);},0);
+  var totalSales=allFiltered.reduce(function(a,r){return a+(r.salesQty||0);},0);
   document.getElementById('reorder-kpis').innerHTML=
-    '<div class="kpi"><p>SKUs shown</p><h2>'+filtered.length+'</h2></div>'+
+    '<div class="kpi"><p>OD SKUs</p><h2>'+filteredOrder.length+'</h2></div>'+
+    '<div class="kpi"><p>Amazon SKUs</p><h2>'+allFiltered.length+'</h2></div>'+
     '<div class="kpi"><p>Critical (&lt;14 days)</p><h2 class="'+(critical>0?'red':'green')+'">'+critical+'</h2></div>'+
     '<div class="kpi"><p>Low (14-30 days)</p><h2 class="'+(low>0?'amber':'green')+'">'+low+'</h2></div>'+
     '<div class="kpi"><p>Last Mo Sales Qty</p><h2>'+totalSales.toLocaleString()+'</h2></div>'+
@@ -1608,59 +1634,73 @@ function renderReorderTable(){
   // Thead
   var th=document.getElementById('reorder-thead');
   th.innerHTML=
-    '<th data-w="100">Brand</th><th data-w="120">Amazon SKU</th><th data-w="90">OD SKU</th><th data-w="260">Title</th><th data-w="90">FBA</th>'+
-    '<th class="num" data-w="60">Eaches</th><th class="num" data-w="70">Case Qty</th>'+
+    '<th data-w="90">OD SKU</th><th data-w="100">Brand</th>'+
+    '<th class="num" data-w="70">Case Qty</th>'+
+    '<th data-w="120">Amazon SKU</th><th data-w="260">Title</th><th data-w="80">FBA</th>'+
+    '<th class="num" data-w="60">Eaches</th>'+
+    '<th class="num" data-w="90" style="background:#1e4d2b;color:#fff">OD Available</th>'+
+    '<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">OD On Hand</th>'+
+    '<th class="num" data-w="70" style="background:#1e4d2b;color:#fff">OD On PO</th>'+
+    '<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">Avg Cost</th>'+
     '<th class="num" data-w="90" style="background:#1a3a5c;color:#fff">AMZ Total</th>'+
     '<th class="num" data-w="90" style="background:#1a3a5c;color:#fff">AMZ Total (OD)</th>'+
     '<th class="num" data-w="60" style="background:#1a3a5c;color:#fff">DOS</th>'+
     '<th class="num" data-w="80" style="background:#1a3a5c;color:#fff">Avg Daily</th>'+
-    '<th class="num" data-w="90" style="background:#1e4d2b;color:#fff">OD Available</th>'+
-    '<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">OD On Hand</th>'+
-    '<th class="num" data-w="70" style="background:#1e4d2b;color:#fff">OD On PO</th>'+
-    '<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">Purchase $</th>'+
-    '<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">Avg Cost</th>'+
     '<th class="num" data-w="80" style="background:#5c2800;color:#fff">Sales Qty</th>'+
     '<th class="num" data-w="80" style="background:#5c2800;color:#fff">Sales Qty (OD)</th>'+
     '<th class="num" data-w="80" style="background:#5c2800;color:#fff">Profit</th>'+
     '<th class="num" data-w="70" style="background:#5c2800;color:#fff">Margin</th>';
 
-  // Pagination
-  var pages=Math.max(1,Math.ceil(filtered.length/PAGE));
+  // Pagination by group
+  var pages=Math.max(1,Math.ceil(filteredOrder.length/PAGE));
   if(reorderPage<0) reorderPage=0;
   if(reorderPage>=pages) reorderPage=pages-1;
-  var pageItems=filtered.slice(reorderPage*PAGE,(reorderPage+1)*PAGE);
+  var pageGroups=filteredOrder.slice(reorderPage*PAGE,(reorderPage+1)*PAGE);
 
-  var rows=pageItems.map(function(r){
-    var dosColor=r.dosBucket==='critical'?'red':r.dosBucket==='low'?'amber':'';
-    return '<tr>'+
-      '<td><span class="badge badge-gray">'+esc(r.brand)+'</span></td>'+
-      '<td style="font-size:11px">'+esc(r.amzSku)+'</td>'+
-      '<td style="font-size:11px;color:#888">'+esc(r.odSku)+'</td>'+
-      '<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
-      '<td style="font-size:12px">'+esc(r.fba)+'</td>'+
-      '<td class="num">'+r.amazonEaches+'</td>'+
-      '<td class="num">'+r.caseQty+'</td>'+
-      '<td class="num" style="background:#deeaf1">'+(r.amzTotal||0).toLocaleString()+'</td>'+
-      '<td class="num" style="background:#deeaf1">'+(r.amzTotalOd||0).toLocaleString()+'</td>'+
-      '<td class="num '+dosColor+'" style="'+(dosColor?'':'background:#deeaf1')+'">'+(r.dos||0)+'</td>'+
-      '<td class="num" style="background:#deeaf1">'+(r.avgDaily?r.avgDaily.toFixed(1):'—')+'</td>'+
-      '<td class="num" style="background:#e2efda">'+(r.odAvail||0).toLocaleString()+'</td>'+
-      '<td class="num" style="background:#e2efda">'+(r.odOnHand||0).toLocaleString()+'</td>'+
-      '<td class="num" style="background:#e2efda">'+(r.odOnPo||0).toLocaleString()+'</td>'+
-      '<td class="num" style="background:#e2efda">'+(r.odPurchasePrice?'$'+r.odPurchasePrice.toFixed(2):'—')+'</td>'+
-      '<td class="num" style="background:#e2efda">'+(r.odAvgCost?'$'+r.odAvgCost.toFixed(2):'—')+'</td>'+
-      '<td class="num" style="background:#fff2cc">'+(r.salesQty||0).toLocaleString()+'</td>'+
-      '<td class="num" style="background:#fff2cc">'+(r.salesQtyOd||0).toLocaleString()+'</td>'+
-      '<td class="num" style="background:#fff2cc">'+(r.profit?'$'+r.profit.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>'+
-      '<td class="num" style="background:#fff2cc">'+(r.margin?(r.margin*100).toFixed(1)+'%':'—')+'</td>'+
-    '</tr>';
-  }).join('');
+  var rows='';
+  pageGroups.forEach(function(k){
+    var g=groups[k];
+    var skus=g._filteredSkus;
+    var span=skus.length;
+    skus.forEach(function(r,i){
+      var dosColor=r.dosBucket==='critical'?'red':r.dosBucket==='low'?'amber':'';
+      rows+='<tr>';
+      if(i===0){
+        rows+=
+          '<td rowspan="'+span+'" style="font-weight:600;font-size:12px;vertical-align:middle">'+esc(g.odSku)+'</td>'+
+          '<td rowspan="'+span+'" style="vertical-align:middle"><span class="badge badge-gray">'+esc(g.brand)+'</span></td>'+
+          '<td rowspan="'+span+'" class="num" style="vertical-align:middle">'+g.caseQty+'</td>';
+      }
+      rows+=
+        '<td style="font-size:11px">'+esc(r.amzSku)+'</td>'+
+        '<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
+        '<td style="font-size:11px">'+esc(r.fba)+'</td>'+
+        '<td class="num">'+r.amazonEaches+'</td>';
+      if(i===0){
+        rows+=
+          '<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odAvail||0).toLocaleString()+'</td>'+
+          '<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odOnHand||0).toLocaleString()+'</td>'+
+          '<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odOnPo||0).toLocaleString()+'</td>'+
+          '<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(g.odAvgCost?'$'+g.odAvgCost.toFixed(2):'—')+'</td>';
+      }
+      rows+=
+        '<td class="num" style="background:#deeaf1">'+(r.amzTotal||0).toLocaleString()+'</td>'+
+        '<td class="num" style="background:#deeaf1">'+(r.amzTotalOd||0).toLocaleString()+'</td>'+
+        '<td class="num '+dosColor+'" style="'+(dosColor?'':'background:#deeaf1')+'">'+(r.dos||0)+'</td>'+
+        '<td class="num" style="background:#deeaf1">'+(r.avgDaily?r.avgDaily.toFixed(1):'—')+'</td>'+
+        '<td class="num" style="background:#fff2cc">'+(r.salesQty||0).toLocaleString()+'</td>'+
+        '<td class="num" style="background:#fff2cc">'+(r.salesQtyOd||0).toLocaleString()+'</td>'+
+        '<td class="num" style="background:#fff2cc">'+(r.profit?'$'+r.profit.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>'+
+        '<td class="num" style="background:#fff2cc">'+(r.margin?(r.margin*100).toFixed(1)+'%':'—')+'</td>'+
+      '</tr>';
+    });
+  });
 
   document.getElementById('reorder-body').innerHTML=rows||'<tr><td colspan="20" style="text-align:center;padding:1rem;color:#888">No rows match filters.</td></tr>';
 
   // Pagination controls
   var pg=document.getElementById('reorder-pagination');
-  pg.innerHTML='<span style="color:#888">'+filtered.length+' rows</span>';
+  pg.innerHTML='<span style="color:#888">'+filteredOrder.length+' OD SKUs / '+allFiltered.length+' Amazon SKUs</span>';
   if(pages>1){
     pg.innerHTML+=' <button class="expbtn" onclick="reorderPage=0;renderReorderTable()" '+(reorderPage===0?'disabled':'')+'>«</button>'+
       ' <button class="expbtn" onclick="reorderPage--;renderReorderTable()" '+(reorderPage===0?'disabled':'')+'>‹</button>'+
@@ -1671,30 +1711,34 @@ function renderReorderTable(){
 }
 
 function exportReorder(){
-  var data=computeReorderData();
+  var computed=computeReorderData();
+  var groups=computed.groups, groupOrder=computed.groupOrder;
   var brandFilter=document.getElementById('reorder-brand-filter').value;
   var fbaFilter=document.getElementById('reorder-fba-filter').value;
   var dosFilter=document.getElementById('reorder-dos-filter').value;
   var search=(document.getElementById('reorder-search').value||'').toLowerCase();
-  var filtered=data.filter(function(r){
-    if(brandFilter && r.brand!==brandFilter) return false;
-    if(fbaFilter && r.fba!==fbaFilter) return false;
-    if(dosFilter && r.dosBucket!==dosFilter) return false;
-    if(search){ var hay=(r.amzSku+' '+r.odSku+' '+r.title+' '+r.brand).toLowerCase(); if(hay.indexOf(search)===-1) return false; }
-    return true;
-  });
-  var rows=filtered.map(function(r){
-    return{
-      'Brand':r.brand,'Amazon SKU':r.amzSku,'OD SKU':r.odSku,'Title':r.title,'FBA':r.fba,
-      'Amazon Eaches':r.amazonEaches,'OD Case Qty':r.caseQty,
-      'AMZ Total (Amz Units)':r.amzTotal,'AMZ Total (OD Units)':r.amzTotalOd,
-      'Days of Supply':r.dos,'Avg Daily Qty':r.avgDaily,
-      'OD Available':r.odAvail,'OD On Hand':r.odOnHand,'OD On PO':r.odOnPo,
-      'OD Purchase Price':r.odPurchasePrice,'OD Avg Cost':r.odAvgCost,
-      'Sales Qty (Last Mo)':r.salesQty,'Sales Qty OD (Last Mo)':r.salesQtyOd,
-      'Profit (Last Mo)':r.profit,
-      'Profit Margin %':r.margin?(r.margin*100).toFixed(1)+'%':''
-    };
+  var rows=[];
+  groupOrder.forEach(function(k){
+    var g=groups[k];
+    if(brandFilter && g.brand!==brandFilter) return;
+    g.skus.forEach(function(r){
+      if(fbaFilter && r.fba!==fbaFilter) return;
+      if(dosFilter==='critical' && r.dosBucket!=='critical') return;
+      if(dosFilter==='low' && r.dosBucket!=='low') return;
+      if(dosFilter==='medium' && r.dosBucket!=='medium') return;
+      if(dosFilter==='ok' && r.dosBucket!=='ok') return;
+      if(search){ var hay=(r.amzSku+' '+r.odSku+' '+r.title+' '+r.brand).toLowerCase(); if(hay.indexOf(search)===-1) return; }
+      rows.push({
+        'OD SKU':g.odSku,'Brand':g.brand,'Case Qty':g.caseQty,
+        'OD Available':+g.odAvail,'OD On Hand':+g.odOnHand,'OD On PO':+g.odOnPo,
+        'OD Purchase Price':g.odPurchasePrice,'OD Avg Cost':g.odAvgCost,
+        'Amazon SKU':r.amzSku,'Title':r.title,'FBA':r.fba,'Amazon Eaches':r.amazonEaches,
+        'AMZ Total':r.amzTotal,'AMZ Total (OD)':r.amzTotalOd,
+        'Days of Supply':r.dos,'Avg Daily':r.avgDaily,
+        'Sales Qty':r.salesQty,'Sales Qty (OD)':r.salesQtyOd,
+        'Profit':r.profit,'Margin %':r.margin?(r.margin*100).toFixed(1):''
+      });
+    });
   });
   exportXlsx(rows,'Reorder_Planning');
 }
