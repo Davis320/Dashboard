@@ -340,6 +340,7 @@ th.num{text-align:right}
           <div class="col-vis-panel" id="colvis-reorder-panel"></div>
         </div>
         <button class="expbtn" onclick="exportReorder()">Export Excel</button>
+        <button class="expbtn" onclick="exportReorderOrder()" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">&#128666; Export Order</button>
       </div>
       <div style="overflow-x:auto;overflow-y:auto;max-height:70vh">
         <table class="data-table">
@@ -1624,6 +1625,40 @@ function populateShipCatFilter(){
   msInit('ship-cat-filter', cats, 'All categories');
 }
 
+function reorderCheckAll(checked){
+  // Check/uncheck all visible OD SKUs
+  document.querySelectorAll('#reorder-body input[type=checkbox]').forEach(function(cb){
+    cb.checked=checked;
+    cb.dispatchEvent(new Event('change'));
+  });
+}
+
+function exportReorderOrder(){
+  var computed=computeReorderData();
+  var groups=computed.groups, groupOrder=computed.groupOrder;
+  var rows=[];
+  groupOrder.forEach(function(k){
+    var g=groups[k];
+    if(!_reorderChecked[g.odSku]) return;
+    var qty=_reorderQty[g.odSku]||'';
+    g.skus.forEach(function(r){
+      rows.push({
+        'Brand':g.brand,
+        'OD SKU':g.odSku,
+        'ASIN':r.asin,
+        'Amazon SKU':r.amzSku,
+        'Title':r.title,
+        'Case Qty':g.caseQty,
+        'Order Qty':qty,
+        'OD Available':+g.odAvail||0,
+        'Avg Cost':g.odAvgCost||0
+      });
+    });
+  });
+  if(!rows.length){ alert('No rows checked. Check the boxes on the rows you want to order.'); return; }
+  exportXlsx(rows,'Reorder_Order_'+new Date().toISOString().slice(0,10));
+}
+
 function shipSort(col){ _shipSort.dir=_shipSort.col===col?-_shipSort.dir:1; _shipSort.col=col; renderShipmentTable(); }
 function reorderSort(col){ _reorderSort.dir=_reorderSort.col===col?-_reorderSort.dir:1; _reorderSort.col=col; renderReorderTable(); }
 
@@ -1802,8 +1837,10 @@ function exportShipment(){
 
 // ── Reorder Planning ─────────────────────────────────────────────────────────
 var reorderPage=0;
-var _shipSort={col:null,dir:1};   // col = field name, dir = 1 asc / -1 desc
+var _shipSort={col:null,dir:1};
 var _reorderSort={col:null,dir:1};
+var _reorderQty={};      // {odSku: qty string}
+var _reorderChecked={};  // {odSku: bool}
 
 function computeReorderData(){
   var invBySku={};
@@ -1905,7 +1942,7 @@ function renderReorderTable(){
   populateReorderFbaFilter(allRows);
 
   // Column visibility
-  var reorderCols=['OD SKU','Brand','Case Qty','Amazon SKU','Title','FBA','Eaches','OD Available','OD On Hand','OD On PO','Avg Cost','AMZ Total','AMZ Total (OD)','DOS','Avg Daily','Sales Qty','Sales Qty (OD)','Profit','Margin','Comment'];
+  var reorderCols=['Select','OD SKU','Brand','Case Qty','ASIN','Amazon SKU','Title','FBA','Eaches','OD Available','OD On Hand','OD On PO','Avg Cost','AMZ Total','AMZ Total (OD)','DOS','Avg Daily','Sales Qty','Sales Qty (OD)','Profit','Margin','Order Qty','Comment'];
   colVisInit('reorder', reorderCols);
   document.getElementById('colvis-reorder-panel').innerHTML=colVisPanel('reorder', reorderCols);
 
@@ -1952,9 +1989,10 @@ function renderReorderTable(){
   function rth(label,col,cls,style){ return thIf(R,label,'<th '+(cls?'class="'+cls+'" ':'')+sc(col,rs,'reorder')+(style?' style="cursor:pointer;user-select:none;'+style+'"':' style="cursor:pointer;user-select:none"')+'>'+label+sa(col,rs)+'</th>'); }
 
   th.innerHTML=
+    thIf(R,'Select','<th data-w="40" style="text-align:center"><input type="checkbox" title="Select all" onchange="reorderCheckAll(this.checked)"></th>')+
     rth('OD SKU','odSku')+rth('Brand','brand')+
     rth('Case Qty','caseQty','num')+
-    rth('Amazon SKU','amzSku')+rth('Title','title')+rth('FBA','fba')+
+    rth('ASIN','asin')+rth('Amazon SKU','amzSku')+rth('Title','title')+rth('FBA','fba')+
     rth('Eaches','amazonEaches','num')+
     rth('OD Available','odAvail','num','background:#1e4d2b;color:#fff')+
     rth('OD On Hand','odOnHand','num','background:#1e4d2b;color:#fff')+
@@ -1968,6 +2006,7 @@ function renderReorderTable(){
     rth('Sales Qty (OD)','salesQtyOd','num','background:#5c2800;color:#fff')+
     rth('Profit','profit','num','background:#5c2800;color:#fff')+
     rth('Margin','margin','num','background:#5c2800;color:#fff')+
+    thIf(R,'Order Qty','<th data-w="90" style="background:#4a3000;color:#fff">Order Qty</th>')+
     thIf(R,'Comment','<th data-w="160">Comment</th>');
 
   // Sort groups by the sort column — use the first SKU row's value for per-SKU fields
@@ -2014,12 +2053,14 @@ function renderReorderTable(){
       rows+='<tr>';
       if(i===0){
         rows+=
+          (colVisible(R,'Select')?'<td rowspan="'+span+'" style="text-align:center;vertical-align:middle"><input type="checkbox" '+(!!_reorderChecked[g.odSku]?'checked':'')+' onchange="_reorderChecked[\'' +g.odSku.replace(/'/g,"\\'")+ '\'] = this.checked"></td>':'')+
           (colVisible(R,'OD SKU')?'<td rowspan="'+span+'" style="font-weight:600;font-size:12px;vertical-align:middle">'+esc(g.odSku)+'</td>':'')+
           (colVisible(R,'Brand')?'<td rowspan="'+span+'" style="vertical-align:middle"><span class="badge badge-gray">'+esc(g.brand)+'</span></td>':'')+
           (colVisible(R,'Case Qty')?'<td rowspan="'+span+'" class="num" style="vertical-align:middle">'+g.caseQty+'</td>':'');
       }
       var dupAsinR=(asinCountR[r.asin]||0)>1;
       rows+=
+        tdIf(R,'ASIN','<td style="font-size:11px">'+asinLink(r.asin)+'</td>')+
         tdIf(R,'Amazon SKU','<td style="font-size:11px;'+(dupAsinR?'color:#C00000':'')+'">'+skuLink(r.amzSku)+'</td>')+
         tdIf(R,'Title','<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>')+
         tdIf(R,'FBA','<td style="font-size:11px">'+esc(r.fba)+'</td>')+
@@ -2039,8 +2080,11 @@ function renderReorderTable(){
         tdIf(R,'Sales Qty','<td class="num" style="background:#fff2cc">'+(r.salesQty||0).toLocaleString()+'</td>')+
         tdIf(R,'Sales Qty (OD)','<td class="num" style="background:#fff2cc">'+(r.salesQtyOd||0).toLocaleString()+'</td>')+
         tdIf(R,'Profit','<td class="num" style="background:#fff2cc">'+(r.profit?'$'+r.profit.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>')+
-        tdIf(R,'Margin','<td class="num" style="background:#fff2cc">'+(r.margin?(r.margin*100).toFixed(1)+'%':'—')+'</td>')+
-        (colVisible(R,'Comment')?commentCell(r.amzSku):'')+
+        tdIf(R,'Margin','<td class="num" style="background:#fff2cc">'+(r.margin?(r.margin*100).toFixed(1)+'%':'—')+'</td>');
+      if(i===0){
+        rows+=(colVisible(R,'Order Qty')?'<td rowspan="'+span+'" style="vertical-align:middle;background:#fff8e8"><input type="number" min="0" placeholder="0" value="'+(_reorderQty[g.odSku]||'')+'" style="width:70px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" data-odsku="'+esc(g.odSku)+'" oninput="_reorderQty[this.dataset.odsku]=this.value"></td>':'');
+      }
+      rows+=(colVisible(R,'Comment')?commentCell(r.amzSku):'')+
       '</tr>';
     });
   });
