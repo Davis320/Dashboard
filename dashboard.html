@@ -483,71 +483,63 @@ function asinLink(asin){
 }
 
 // ── Multi-select dropdown ──
-var _msState={};   // {id: Set of selected values} — empty Set = "All" selected
-var _msValues={};  // {id: array of all values}
+var _msState={};   // {id: Set of selected values} — empty = All, has values = only those
+var _msValues={};  // {id: array of all option values}
 
 function msInit(id, values, label){
   _msValues[id]=values;
-  if(!_msState[id]) _msState[id]=new Set(); // empty = All
+  if(!_msState[id]) _msState[id]=new Set();
   var sel=_msState[id];
   var btn=document.getElementById(id+'-btn');
   if(!btn) return;
-  var allSelected=sel.size===0;
-  btn.querySelector('.ms-label').textContent=allSelected?label:(sel.size+' selected');
+  var allOn=sel.size===0;
+  btn.querySelector('.ms-label').textContent=allOn?label:(sel.size+' selected');
   var dd=document.getElementById(id+'-dd');
-  dd.innerHTML='<div class="ms-option ms-all"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" '+(allSelected?'checked':'')+' onchange="msClearAll(\''+id+'\',this.checked)"> All</label></div>';
+  dd.innerHTML='<div class="ms-option ms-all"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-all-'+id+'" '+(allOn?'checked':'')+' onchange="msAll(\''+id+'\',this.checked)"> All</label></div>';
   values.forEach(function(v){
-    var checked=allSelected||sel.has(v);
-    dd.innerHTML+='<div class="ms-option"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" value="'+esc(v)+'" '+(checked?'checked':'')+' onchange="msToggle(\''+id+'\',\''+esc(v)+'\',this.checked)"> '+esc(v)+'</label></div>';
+    dd.innerHTML+='<div class="ms-option"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" value="'+esc(v)+'" '+(allOn||sel.has(v)?'checked':'')+' onchange="msPick(\''+id+'\',\''+esc(v)+'\',this.checked)"> '+esc(v)+'</label></div>';
   });
 }
 
-function msToggle(id, val, checked){
+function msAll(id, checked){
   var sel=_msState[id];
-  var allVals=_msValues[id]||[];
-  // If previously "All" (empty set), switching to explicit selection
-  if(sel.size===0 && !checked){
-    // Uncheck one item = select all others explicitly
-    allVals.forEach(function(v){ sel.add(v); });
-  }
-  if(checked) sel.add(val); else sel.delete(val);
-  // If all items are now checked, revert to "All" (empty set)
-  if(allVals.length && allVals.every(function(v){ return sel.has(v); })) sel.clear();
-  // Update All checkbox
+  sel.clear(); // empty = All selected
   var dd=document.getElementById(id+'-dd');
-  var allCb=dd.querySelector('.ms-all input');
+  dd.querySelectorAll('.ms-option:not(.ms-all) input').forEach(function(cb){ cb.checked=checked; });
+  if(!checked){
+    // Uncheck All = select nothing = add sentinel
+    sel.add('__NONE__');
+  }
+  var btn=document.getElementById(id+'-btn');
+  btn.querySelector('.ms-label').textContent=checked?btn.dataset.label:'None';
+  _msFire(id);
+}
+
+function msPick(id, val, checked){
+  var sel=_msState[id];
+  var vals=_msValues[id]||[];
+  // If currently "All" (empty set), switch to explicit mode with all checked first
+  if(sel.size===0){
+    vals.forEach(function(v){ sel.add(v); });
+  }
+  // Remove sentinel if present
+  sel.delete('__NONE__');
+  if(checked) sel.add(val); else sel.delete(val);
+  // If all items are now checked, revert to "All" mode
+  if(vals.length>0 && vals.every(function(v){ return sel.has(v); })){
+    sel.clear();
+  }
+  // Sync All checkbox
+  var allCb=document.getElementById('ms-all-'+id);
   if(allCb) allCb.checked=sel.size===0;
   var btn=document.getElementById(id+'-btn');
   btn.querySelector('.ms-label').textContent=sel.size===0?btn.dataset.label:(sel.size+' selected');
-  _msFireChange(btn);
+  _msFire(id);
 }
 
-function msClearAll(id, checked){
-  var sel=_msState[id];
-  var allVals=_msValues[id]||[];
+function _msFire(id){
   var btn=document.getElementById(id+'-btn');
-  var dd=document.getElementById(id+'-dd');
-  if(checked){
-    // Check All = clear explicit selections
-    sel.clear();
-    dd.querySelectorAll('.ms-option:not(.ms-all) input').forEach(function(cb){ cb.checked=true; });
-    btn.querySelector('.ms-label').textContent=btn.dataset.label;
-  }else{
-    // Uncheck All = select nothing (add all to set so msMatches returns false for all)
-    allVals.forEach(function(v){ sel.add(v); });
-    // Uncheck all items
-    dd.querySelectorAll('.ms-option:not(.ms-all) input').forEach(function(cb){ cb.checked=false; sel.delete(cb.value); });
-    // Actually: uncheck All means show nothing — set sel to a special sentinel
-    sel.clear();
-    sel.add('__NONE__');
-    btn.querySelector('.ms-label').textContent='None';
-  }
-  _msFireChange(btn);
-}
-
-function _msFireChange(btn){
-  var fn=btn.dataset.onchange;
-  if(fn && window[fn]) window[fn]();
+  if(btn && btn.dataset.onchange && window[btn.dataset.onchange]) window[btn.dataset.onchange]();
 }
 
 function msOpen(id){
@@ -559,9 +551,9 @@ function msOpen(id){
 
 function msMatches(id, val){
   var sel=_msState[id];
-  if(!sel||sel.size===0) return true; // All selected
-  if(sel.has('__NONE__')) return false; // None selected
-  return sel.has(val);
+  if(!sel||sel.size===0) return true;
+  if(sel.has('__NONE__')) return false;
+  return sel.has(String(val||''));
 }
 
 document.addEventListener('click',function(e){
