@@ -46,6 +46,21 @@ h1{font-size:20px;font-weight:500}
 .comment-popup{position:fixed;z-index:500;background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);width:280px}
 .comment-popup textarea{width:100%;height:80px;border:1px solid #ddd;border-radius:6px;padding:6px;font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit}
 .comment-popup-btns{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+.ms-wrap{position:relative;display:inline-block}
+.ms-btn{padding:6px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;white-space:nowrap;min-width:100px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ms-btn:after{content:'▾';font-size:10px;color:#888}
+.ms-dropdown{position:absolute;top:100%;left:0;z-index:300;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:180px;max-height:280px;overflow-y:auto;display:none;padding:4px 0}
+.ms-wrap.open .ms-dropdown{display:block}
+.ms-option{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:13px}
+.ms-option:hover{background:#f5f5f3}
+.ms-option input{margin:0;cursor:pointer}
+.ms-all{border-bottom:1px solid #eee;margin-bottom:2px}
+.col-vis-btn{padding:6px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px}
+.col-vis-panel{position:absolute;top:100%;right:0;z-index:300;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);padding:8px 12px;min-width:200px;display:none;max-height:320px;overflow-y:auto}
+.col-vis-wrap{position:relative;display:inline-block}
+.col-vis-wrap.open .col-vis-panel{display:block}
+.col-vis-item{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer}
+.col-vis-item input{margin:0;cursor:pointer}
 .sync-status.ok{background:#eaf3de;color:#3B6D11}
 .sync-status.err{background:#fcebeb;color:#A32D2D}
 .sync-status.syncing{background:#e8f0fe;color:#185FA5}
@@ -168,12 +183,19 @@ th.num{text-align:right}
       <div class="sec-title">Product mapping</div>
       <div class="filter-row">
         <input type="text" id="map-search" placeholder="Search ASIN, SKU, title..." oninput="renderMappingTable()" style="flex:1;max-width:280px">
-        <select id="map-brand" onchange="renderMappingTable()"><option value="">All brands</option></select>
+        <div class="ms-wrap" id="map-brand-wrap">
+          <button class="ms-btn" id="map-brand-btn" data-label="All brands" data-onchange="renderMappingTable" onclick="msOpen('map-brand')"><span class="ms-label">All brands</span></button>
+          <div class="ms-dropdown" id="map-brand-dd"></div>
+        </div>
         <select id="map-fba" onchange="renderMappingTable()">
           <option value="">All FBA types</option>
           <option value="Marketplace">Marketplace</option>
           <option value="Seller">Seller</option>
         </select>
+        <div class="col-vis-wrap" id="colvis-mapping-wrap" style="position:relative">
+          <button class="col-vis-btn" onclick="colVisOpen('mapping')" title="Show/hide columns">&#9636; Columns</button>
+          <div class="col-vis-panel" id="colvis-mapping-panel"></div>
+        </div>
         <button class="btn-ok" onclick="addMappingRow()" style="font-size:12px;padding:6px 12px">+ Add row</button>
         <button class="expbtn" onclick="exportMapping()">&#8659; Export Excel</button>
       </div>
@@ -236,7 +258,14 @@ th.num{text-align:right}
       <div class="sec-title">Shipment suggestions by SKU</div>
       <div class="filter-row">
         <input type="text" id="ship-search" placeholder="Search SKU, ASIN, title..." oninput="renderShipmentTable()" style="flex:1;max-width:280px">
-        <select id="ship-brand-filter" onchange="renderShipmentTable()"><option value="">All brands</option></select>
+        <div class="ms-wrap" id="ship-brand-filter-wrap">
+          <button class="ms-btn" id="ship-brand-filter-btn" data-label="All brands" data-onchange="renderShipmentTable" onclick="msOpen('ship-brand-filter')"><span class="ms-label">All brands</span></button>
+          <div class="ms-dropdown" id="ship-brand-filter-dd"></div>
+        </div>
+        <div class="ms-wrap" id="ship-cat-filter-wrap">
+          <button class="ms-btn" id="ship-cat-filter-btn" data-label="All categories" data-onchange="renderShipmentTable" onclick="msOpen('ship-cat-filter')"><span class="ms-label">All categories</span></button>
+          <div class="ms-dropdown" id="ship-cat-filter-dd"></div>
+        </div>
         <select id="ship-dos-filter" onchange="renderShipmentTable()">
           <option value="">All DOS buckets</option>
           <option value="0-30">0-30</option>
@@ -249,7 +278,6 @@ th.num{text-align:right}
           <option value="">All SKUs</option>
           <option value="zero">Zero sales only</option>
         </select>
-        <select id="ship-cat-filter" onchange="renderShipmentTable()"><option value="">All categories</option></select>
         <select id="ship-received-filter" onchange="renderShipmentTable()">
           <option value="">All (received &amp; not)</option>
           <option value="yes">Received this week only</option>
@@ -260,6 +288,10 @@ th.num{text-align:right}
           <option value="Active">Active only</option>
           <option value="Inactive">Inactive only</option>
         </select>
+        <div class="col-vis-wrap" id="colvis-shipment-wrap" style="position:relative">
+          <button class="col-vis-btn" onclick="colVisOpen('shipment')" title="Show/hide columns">&#9636; Columns</button>
+          <div class="col-vis-panel" id="colvis-shipment-panel"></div>
+        </div>
         <button class="expbtn" onclick="exportShipment()">&#8659; Export Excel</button>
       </div>
       <div id="ship-kpis" class="kpi-grid"></div>
@@ -288,8 +320,14 @@ th.num{text-align:right}
       <div id="reorder-kpis" class="kpi-grid"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.75rem;align-items:center">
         <input type="text" id="reorder-search" placeholder="Search SKU, title..." oninput="renderReorderTable()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;width:200px">
-        <select id="reorder-brand-filter" onchange="renderReorderTable()"><option value="">All brands</option></select>
-        <select id="reorder-fba-filter" onchange="renderReorderTable()"><option value="">All FBA types</option></select>
+        <div class="ms-wrap" id="reorder-brand-filter-wrap">
+          <button class="ms-btn" id="reorder-brand-filter-btn" data-label="All brands" data-onchange="renderReorderTable" onclick="msOpen('reorder-brand-filter')"><span class="ms-label">All brands</span></button>
+          <div class="ms-dropdown" id="reorder-brand-filter-dd"></div>
+        </div>
+        <div class="ms-wrap" id="reorder-fba-filter-wrap">
+          <button class="ms-btn" id="reorder-fba-filter-btn" data-label="All FBA types" data-onchange="renderReorderTable" onclick="msOpen('reorder-fba-filter')"><span class="ms-label">All FBA types</span></button>
+          <div class="ms-dropdown" id="reorder-fba-filter-dd"></div>
+        </div>
         <select id="reorder-dos-filter" onchange="renderReorderTable()">
           <option value="">All DOS</option>
           <option value="critical">Critical (&lt;14 days)</option>
@@ -297,6 +335,10 @@ th.num{text-align:right}
           <option value="medium">Medium (31-60 days)</option>
           <option value="ok">OK (&gt;60 days)</option>
         </select>
+        <div class="col-vis-wrap" id="colvis-reorder-wrap" style="position:relative">
+          <button class="col-vis-btn" onclick="colVisOpen('reorder')" title="Show/hide columns">&#9636; Columns</button>
+          <div class="col-vis-panel" id="colvis-reorder-panel"></div>
+        </div>
         <button class="expbtn" onclick="exportReorder()">Export Excel</button>
       </div>
       <div style="overflow-x:auto">
@@ -417,7 +459,111 @@ if(window.location.protocol !== 'file:' && window.location.hostname !== 'localho
   }
 }
 
-// ── Comments ──
+// ── Multi-select dropdown ──
+var _msState={};  // {id: Set of selected values}
+
+function msInit(id, values, label, onchange){
+  if(!_msState[id]) _msState[id]=new Set();
+  var sel=_msState[id];
+  var btn=document.getElementById(id+'-btn');
+  if(!btn) return;
+  var allSelected=sel.size===0;
+  btn.querySelector('.ms-label').textContent=allSelected?label:(sel.size+' selected');
+  var dd=document.getElementById(id+'-dd');
+  dd.innerHTML='<div class="ms-option ms-all"><label><input type="checkbox" '+(allSelected?'checked':'')+' onchange="msClearAll(\''+id+'\',this.checked,\''+label+'\')"> All</label></div>';
+  values.forEach(function(v){
+    var checked=allSelected||sel.has(v);
+    dd.innerHTML+='<div class="ms-option"><label><input type="checkbox" value="'+esc(v)+'" '+(checked?'checked':'')+' onchange="msToggle(\''+id+'\',\''+esc(v)+'\',this.checked)"> '+esc(v)+'</label></div>';
+  });
+}
+
+function msToggle(id, val, checked){
+  var sel=_msState[id];
+  if(checked) sel.add(val); else sel.delete(val);
+  // Update "All" checkbox
+  var dd=document.getElementById(id+'-dd');
+  var allCb=dd.querySelector('.ms-all input');
+  if(allCb) allCb.checked=sel.size===0;
+  var btn=document.getElementById(id+'-btn');
+  btn.querySelector('.ms-label').textContent=sel.size===0?btn.dataset.label:(sel.size+' selected');
+  // Trigger render
+  (window[btn.dataset.onchange]||function(){})();
+}
+
+function msClearAll(id, checked, label){
+  var sel=_msState[id];
+  if(checked){ sel.clear(); }
+  var btn=document.getElementById(id+'-btn');
+  btn.querySelector('.ms-label').textContent=label;
+  var dd=document.getElementById(id+'-dd');
+  dd.querySelectorAll('.ms-option:not(.ms-all) input').forEach(function(cb){ cb.checked=checked; });
+  (window[btn.dataset.onchange]||function(){})();
+}
+
+function msOpen(id){
+  var wrap=document.getElementById(id+'-wrap');
+  var isOpen=wrap.classList.contains('open');
+  // Close all other ms dropdowns
+  document.querySelectorAll('.ms-wrap.open,.col-vis-wrap.open').forEach(function(el){ el.classList.remove('open'); });
+  if(!isOpen) wrap.classList.add('open');
+}
+
+function msMatches(id, val){
+  var sel=_msState[id];
+  return sel.size===0 || sel.has(val);
+}
+
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.ms-wrap') && !e.target.closest('.col-vis-wrap')){
+    document.querySelectorAll('.ms-wrap.open,.col-vis-wrap.open').forEach(function(el){ el.classList.remove('open'); });
+  }
+});
+
+// ── Column visibility ──
+var _colVis={};  // {tableId: {colName: boolean}}
+
+function colVisInit(tableId, cols){
+  if(!_colVis[tableId]){
+    var saved=JSON.parse(localStorage.getItem('col_vis_'+tableId)||'null');
+    _colVis[tableId]=saved||{};
+    cols.forEach(function(c){ if(_colVis[tableId][c]===undefined) _colVis[tableId][c]=true; });
+  }
+}
+
+function colVisPanel(tableId, cols){
+  var vis=_colVis[tableId]||{};
+  return cols.map(function(c){
+    return '<div class="col-vis-item"><label><input type="checkbox" '+(vis[c]!==false?'checked':'')+' onchange="colVisToggle(\''+tableId+'\',\''+c+'\',this.checked)"> '+c+'</label></div>';
+  }).join('');
+}
+
+function colVisToggle(tableId, col, visible){
+  if(!_colVis[tableId]) _colVis[tableId]={};
+  _colVis[tableId][col]=visible;
+  localStorage.setItem('col_vis_'+tableId, JSON.stringify(_colVis[tableId]));
+  // Re-render the right table
+  if(tableId==='mapping') renderMappingTable();
+  else if(tableId==='shipment') renderShipmentTable();
+  else if(tableId==='reorder') renderReorderTable();
+  else if(tableId==='od') renderODTable();
+  else if(tableId==='roi') renderRoi();
+}
+
+function colVisOpen(tableId){
+  var wrap=document.getElementById('colvis-'+tableId+'-wrap');
+  var isOpen=wrap.classList.contains('open');
+  document.querySelectorAll('.ms-wrap.open,.col-vis-wrap.open').forEach(function(el){ el.classList.remove('open'); });
+  if(!isOpen) wrap.classList.add('open');
+}
+
+function colVisible(tableId, col){
+  return !_colVis[tableId] || _colVis[tableId][col]!==false;
+}
+
+function thIf(tableId, col, html){ return colVisible(tableId,col)?html:''; }
+function tdIf(tableId, col, html){ return colVisible(tableId,col)?html:'<td style="display:none"></td>'; }
+
+
 var _commentSku='';
 function openCommentPopup(sku, event){
   _commentSku=sku;
@@ -826,9 +972,7 @@ function findColWS(row,keys){
 // ── Filters ──
 function populateMappingBrandFilter(){
   var brands=[...new Set(mappingData.map(function(r){return r.brand;}).filter(Boolean))].sort();
-  var sel=document.getElementById('map-brand');
-  sel.innerHTML='<option value="">All brands</option>';
-  brands.forEach(function(b){sel.innerHTML+='<option value="'+b+'">'+b+'</option>';});
+  msInit('map-brand', brands, 'All brands');
 }
 function populateRoiBrandFilter(){
   var brands=[...new Set(mappingData.map(function(r){return r.brand;}).filter(Boolean))].sort();
@@ -1156,17 +1300,24 @@ function addMappingRow(){
 
 function cell(idx,field,width){
   var val=mappingData[idx][field]||'';
-  return '<td><input style="width:'+width+'px;border:1px solid #ddd;border-radius:4px;padding:2px 6px;font-size:12px;background:#fff" value="'+esc(val)+'" onchange="mappingData['+idx+'].'+field+'=this.value;localStorage.setItem(\'amz_mapping\',JSON.stringify(mappingData));if(\''+field+'\'===\'brand\'){populateMappingBrandFilter();populateRoiBrandFilter();}"></td>';
+  return '<td><input style="width:'+width+'px;border:1px solid #ddd;border-radius:4px;padding:2px 6px;font-size:12px;background:#fff" value="'+esc(val)+'" onchange="mappingData['+idx+'].'+field+'=this.value;localStorage.setItem(\'amz_mapping\',JSON.stringify(mappingData));syncToServer(\'mapping\',mappingData);if(\''+field+'\'===\'brand\'){populateMappingBrandFilter();populateRoiBrandFilter();}"></td>';
 }
 
 function renderMappingTable(){
   var search=(document.getElementById('map-search').value||'').toLowerCase();
-  var brandFilter=document.getElementById('map-brand').value;
   var fbaFilter=document.getElementById('map-fba').value;
+
+  // Column visibility
+  var mapCols=['Active','Brand','ASIN','Amazon SKU','OD SKU','Amazon title','Eaches','FBA','Category','Comment'];
+  colVisInit('mapping', mapCols);
+  document.getElementById('colvis-mapping-panel').innerHTML=colVisPanel('mapping', mapCols);
+
+  // Populate brand filter
+  populateMappingBrandFilter();
 
   var filtered=mappingData.map(function(r,i){return{r:r,i:i};}).filter(function(x){
     var r=x.r;
-    if(brandFilter && r.brand!==brandFilter) return false;
+    if(!msMatches('map-brand',r.brand)) return false;
     if(fbaFilter && r.fba!==fbaFilter) return false;
     if(search){
       var hay=(r.asin+' '+r.sku+' '+r.title+' '+r.odSku+' '+r.brand).toLowerCase();
@@ -1184,7 +1335,7 @@ function renderMappingTable(){
   pageItems.forEach(function(x){
     var i=x.i, r=x.r;
     rows+='<tr>';
-    rows+='<td><select style="font-size:12px;padding:2px 4px;border:1px solid #ddd;border-radius:4px" onchange="mappingData['+i+'].active=this.value;localStorage.setItem(\'amz_mapping\',JSON.stringify(mappingData))">'+
+    rows+='<td><select style="font-size:12px;padding:2px 4px;border:1px solid #ddd;border-radius:4px" onchange="mappingData['+i+'].active=this.value;localStorage.setItem(\'amz_mapping\',JSON.stringify(mappingData));syncToServer(\'mapping\',mappingData)">'+
       '<option value="Active"'+((r.active||'Active')==='Active'?' selected':'')+'>Active</option>'+
       '<option value="Inactive"'+(r.active==='Inactive'?' selected':'')+'>Inactive</option></select></td>';
     rows+=cell(i,'brand',90);
@@ -1368,19 +1519,11 @@ function computeShipmentData(){
 
 function populateShipBrandFilter(){
   var brands=[...new Set(mappingData.map(function(r){return r.brand;}).filter(Boolean))].sort();
-  var sel=document.getElementById('ship-brand-filter');
-  if(!sel)return;
-  var cur=sel.value;
-  sel.innerHTML='<option value="">All brands</option>';
-  brands.forEach(function(b){sel.innerHTML+='<option value="'+b+'"'+(b===cur?' selected':'')+'>'+b+'</option>';});
+  msInit('ship-brand-filter', brands, 'All brands');
 }
 function populateShipCatFilter(){
   var cats=[...new Set(mappingData.map(function(r){return r.category;}).filter(Boolean))].sort();
-  var sel=document.getElementById('ship-cat-filter');
-  if(!sel)return;
-  var cur=sel.value;
-  sel.innerHTML='<option value="">All categories</option>';
-  cats.forEach(function(c){sel.innerHTML+='<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>';});
+  msInit('ship-cat-filter', cats, 'All categories');
 }
 
 function renderShipmentTable(){
@@ -1396,19 +1539,22 @@ function renderShipmentTable(){
   empty.style.display='none';
   populateShipBrandFilter(); populateShipCatFilter();
 
+  // Column visibility
+  var shipCols=['ASIN','SKU','Brand','Category','Description','DOS Bucket','Amazon Total','Amazon Inbound','AMZ Total (OD Units)','30 Day Sales','Zero Sales','OD Available (AMZ Qty)','OD Available','GP','OD SKU','Amazon Eaches','OD Unit Qty','Received Wk','Comment'];
+  colVisInit('shipment', shipCols);
+  document.getElementById('colvis-shipment-panel').innerHTML=colVisPanel('shipment', shipCols);
+
   var receivedSet=new Set(inboundSkus);
   var search=(document.getElementById('ship-search').value||'').toLowerCase();
-  var brandFilter=document.getElementById('ship-brand-filter').value;
   var dosFilter=document.getElementById('ship-dos-filter').value;
   var zeroFilter=document.getElementById('ship-zero-filter').value;
-  var catFilter=document.getElementById('ship-cat-filter').value;
   var receivedFilter=document.getElementById('ship-received-filter').value;
   var activeFilter=document.getElementById('ship-active-filter').value;
 
   var filtered=shipmentData.filter(function(r){
-    if(brandFilter && r.brand!==brandFilter) return false;
+    if(!msMatches('ship-brand-filter',r.brand)) return false;
     if(dosFilter && r.dosBucket!==dosFilter) return false;
-    if(catFilter && r.shipType!==catFilter) return false;
+    if(!msMatches('ship-cat-filter',r.shipType)) return false;
     if(zeroFilter==='zero' && r.zeroSales!=='No Sales') return false;
     if(activeFilter && r.active!==activeFilter) return false;
     var isReceived=receivedSet.has(r.odSku);
@@ -1438,15 +1584,17 @@ function renderShipmentTable(){
     asinCount[m.asin]=(asinCount[m.asin]||0)+1;
   });
 
-  th.innerHTML='<th data-w="110">ASIN</th><th data-w="120">SKU</th><th data-w="100">Brand</th><th data-w="100">Category</th><th data-w="280">Description</th>'+
-    '<th data-w="90">DOS Bucket</th>'+
-    '<th class="num" data-w="90">Amazon Total</th><th class="num" data-w="90">Amazon Inbound</th><th class="num" data-w="100">AMZ Total (OD Units)</th>'+
-    '<th class="num" data-w="90">30 Day Sales</th><th class="num" data-w="80">Zero Sales</th>'+
-    '<th class="num" data-w="100">OD Available (AMZ Qty)</th><th class="num" data-w="90">OD Available</th>'+
-    '<th class="num" data-w="70">GP</th>'+
-    '<th data-w="90">OD SKU</th><th class="num" data-w="80">Amazon Eaches</th><th class="num" data-w="80">OD Unit Qty</th>'+
-    '<th data-w="90">Received Wk</th>'+
-    '<th data-w="160">Comment</th>';
+  var T='shipment';
+  th.innerHTML=
+    thIf(T,'ASIN','<th data-w="110">ASIN</th>')+thIf(T,'SKU','<th data-w="120">SKU</th>')+thIf(T,'Brand','<th data-w="100">Brand</th>')+thIf(T,'Category','<th data-w="100">Category</th>')+thIf(T,'Description','<th data-w="280">Description</th>')+
+    thIf(T,'DOS Bucket','<th data-w="90">DOS Bucket</th>')+
+    thIf(T,'Amazon Total','<th class="num" data-w="90">Amazon Total</th>')+thIf(T,'Amazon Inbound','<th class="num" data-w="90">Amazon Inbound</th>')+thIf(T,'AMZ Total (OD Units)','<th class="num" data-w="100">AMZ Total (OD Units)</th>')+
+    thIf(T,'30 Day Sales','<th class="num" data-w="90">30 Day Sales</th>')+thIf(T,'Zero Sales','<th class="num" data-w="80">Zero Sales</th>')+
+    thIf(T,'OD Available (AMZ Qty)','<th class="num" data-w="100">OD Available (AMZ Qty)</th>')+thIf(T,'OD Available','<th class="num" data-w="90">OD Available</th>')+
+    thIf(T,'GP','<th class="num" data-w="70">GP</th>')+
+    thIf(T,'OD SKU','<th data-w="90">OD SKU</th>')+thIf(T,'Amazon Eaches','<th class="num" data-w="80">Amazon Eaches</th>')+thIf(T,'OD Unit Qty','<th class="num" data-w="80">OD Unit Qty</th>')+
+    thIf(T,'Received Wk','<th data-w="90">Received Wk</th>')+
+    thIf(T,'Comment','<th data-w="160">Comment</th>');
 
   var pages=Math.max(1,Math.ceil(filtered.length/PAGE));
   if(shipPage<0)shipPage=0;
@@ -1460,25 +1608,25 @@ function renderShipmentTable(){
     var dupAsin=(asinCount[r.asin]||0)>1;
     var received=receivedSet.has(r.odSku);
     return '<tr>'+
-      '<td style="font-size:11px;color:#185FA5">'+esc(r.asin)+'</td>'+
-      '<td style="font-size:12px;font-weight:500;'+(dupAsin?'color:#C00000':'')+'">'+esc(r.sku)+'</td>'+
-      '<td><span class="badge badge-gray">'+esc(brand)+'</span></td>'+
-      '<td style="font-size:12px;color:#555">'+esc(r.shipType||'')+'</td>'+
-      '<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
-      '<td class="'+dosColor+'">'+esc(r.dosBucket)+'</td>'+
-      '<td class="num">'+(r.amazonTotal||0).toLocaleString()+'</td>'+
-      '<td class="num">'+(r.amazonInbound||0).toLocaleString()+'</td>'+
-      '<td class="num">'+(r.amzOdUnits||0).toLocaleString()+'</td>'+
-      '<td class="num">'+(r.sales30||0).toLocaleString()+'</td>'+
-      '<td class="num">'+(isZero?'<span class="badge" style="background:#fcebeb;color:#A32D2D">No Sales</span>':'—')+'</td>'+
-      '<td class="num">'+(r.odAvailAmz||0).toLocaleString()+'</td>'+
-      '<td class="num">'+(r.odAvail||0).toLocaleString()+'</td>'+
-      '<td class="num">'+(r.gp!==null&&r.gp!==undefined&&r.gp!==''?(+r.gp*100).toFixed(1)+'%':'—')+'</td>'+
-      '<td style="font-size:11px;color:#888">'+esc(r.odSku)+'</td>'+
-      '<td class="num">'+(r.amazonEaches||0).toLocaleString()+'</td>'+
-      '<td class="num">'+(r.odUnitQty||0).toLocaleString()+'</td>'+
-      '<td style="text-align:center;font-size:14px">'+(received?'<span style="color:#1D6335;font-weight:700">✓</span>':'')+'</td>'+
-      commentCell(r.sku)+
+      tdIf(T,'ASIN','<td style="font-size:11px;color:#185FA5">'+esc(r.asin)+'</td>')+
+      tdIf(T,'SKU','<td style="font-size:12px;font-weight:500;'+(dupAsin?'color:#C00000':'')+'">'+esc(r.sku)+'</td>')+
+      tdIf(T,'Brand','<td><span class="badge badge-gray">'+esc(brand)+'</span></td>')+
+      tdIf(T,'Category','<td style="font-size:12px;color:#555">'+esc(r.shipType||'')+'</td>')+
+      tdIf(T,'Description','<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(r.title)+'">'+esc(r.title)+'</td>')+
+      tdIf(T,'DOS Bucket','<td class="'+dosColor+'">'+esc(r.dosBucket)+'</td>')+
+      tdIf(T,'Amazon Total','<td class="num">'+(r.amazonTotal||0).toLocaleString()+'</td>')+
+      tdIf(T,'Amazon Inbound','<td class="num">'+(r.amazonInbound||0).toLocaleString()+'</td>')+
+      tdIf(T,'AMZ Total (OD Units)','<td class="num">'+(r.amzOdUnits||0).toLocaleString()+'</td>')+
+      tdIf(T,'30 Day Sales','<td class="num">'+(r.sales30||0).toLocaleString()+'</td>')+
+      tdIf(T,'Zero Sales','<td class="num">'+(isZero?'<span class="badge" style="background:#fcebeb;color:#A32D2D">No Sales</span>':'—')+'</td>')+
+      tdIf(T,'OD Available (AMZ Qty)','<td class="num">'+(r.odAvailAmz||0).toLocaleString()+'</td>')+
+      tdIf(T,'OD Available','<td class="num">'+(r.odAvail||0).toLocaleString()+'</td>')+
+      tdIf(T,'GP','<td class="num">'+(r.gp!==null&&r.gp!==undefined&&r.gp!==''?(+r.gp*100).toFixed(1)+'%':'—')+'</td>')+
+      tdIf(T,'OD SKU','<td style="font-size:11px;color:#888">'+esc(r.odSku)+'</td>')+
+      tdIf(T,'Amazon Eaches','<td class="num">'+(r.amazonEaches||0).toLocaleString()+'</td>')+
+      tdIf(T,'OD Unit Qty','<td class="num">'+(r.odUnitQty||0).toLocaleString()+'</td>')+
+      tdIf(T,'Received Wk','<td style="text-align:center;font-size:14px">'+(received?'<span style="color:#1D6335;font-weight:700">✓</span>':'')+'</td>')+
+      (colVisible(T,'Comment')?commentCell(r.sku):'')+
     '</tr>';
   }).join('');
   document.getElementById('ship-body').innerHTML=rows || '<tr><td colspan="18" style="text-align:center;padding:1rem;color:#888">No rows match your filters.</td></tr>';
@@ -1508,18 +1656,16 @@ function exportOD(){
 function exportShipment(){
   var shipmentData=computeShipmentData();
   var expReceivedSet=new Set(inboundSkus);
-  var brandFilter=document.getElementById('ship-brand-filter').value;
   var dosFilter=document.getElementById('ship-dos-filter').value;
   var zeroFilter=document.getElementById('ship-zero-filter').value;
-  var catFilter=document.getElementById('ship-cat-filter').value;
   var receivedFilter=document.getElementById('ship-received-filter').value;
   var activeFilter=document.getElementById('ship-active-filter').value;
   var search=(document.getElementById('ship-search').value||'').toLowerCase();
 
   var filtered=shipmentData.filter(function(r){
-    if(brandFilter && r.brand!==brandFilter) return false;
+    if(!msMatches('ship-brand-filter',r.brand)) return false;
     if(dosFilter && r.dosBucket!==dosFilter) return false;
-    if(catFilter && r.shipType!==catFilter) return false;
+    if(!msMatches('ship-cat-filter',r.shipType)) return false;
     if(zeroFilter==='zero' && r.zeroSales!=='No Sales') return false;
     if(activeFilter && r.active!==activeFilter) return false;
     var isReceived=expReceivedSet.has(r.odSku);
@@ -1629,21 +1775,13 @@ function computeReorderData(){
 }
 
 function populateReorderBrandFilter(data){
-  var sel=document.getElementById('reorder-brand-filter');
-  if(!sel) return;
-  var cur=sel.value;
   var vals=[...new Set(data.map(function(r){return r.brand;}).filter(Boolean))].sort();
-  sel.innerHTML='<option value="">All brands</option>';
-  vals.forEach(function(v){ sel.innerHTML+='<option value="'+v+'"'+(v===cur?' selected':'')+'>'+v+'</option>'; });
+  msInit('reorder-brand-filter', vals, 'All brands');
 }
 
 function populateReorderFbaFilter(data){
-  var sel=document.getElementById('reorder-fba-filter');
-  if(!sel) return;
-  var cur=sel.value;
   var vals=[...new Set(data.map(function(r){return r.fba;}).filter(Boolean))].sort();
-  sel.innerHTML='<option value="">All FBA types</option>';
-  vals.forEach(function(v){ sel.innerHTML+='<option value="'+v+'"'+(v===cur?' selected':'')+'>'+v+'</option>'; });
+  msInit('reorder-fba-filter', vals, 'All FBA types');
 }
 
 function renderReorderTable(){
@@ -1657,17 +1795,20 @@ function renderReorderTable(){
   populateReorderBrandFilter(allRows);
   populateReorderFbaFilter(allRows);
 
+  // Column visibility
+  var reorderCols=['OD SKU','Brand','Case Qty','Amazon SKU','Title','FBA','Eaches','OD Available','OD On Hand','OD On PO','Avg Cost','AMZ Total','AMZ Total (OD)','DOS','Avg Daily','Sales Qty','Sales Qty (OD)','Profit','Margin','Comment'];
+  colVisInit('reorder', reorderCols);
+  document.getElementById('colvis-reorder-panel').innerHTML=colVisPanel('reorder', reorderCols);
+
   var search=(document.getElementById('reorder-search').value||'').toLowerCase();
-  var brandFilter=document.getElementById('reorder-brand-filter').value;
-  var fbaFilter=document.getElementById('reorder-fba-filter').value;
   var dosFilter=document.getElementById('reorder-dos-filter').value;
 
   // Filter groups — keep group if any SKU matches
   var filteredOrder=groupOrder.filter(function(k){
     var g=groups[k];
-    if(brandFilter && g.brand!==brandFilter) return false;
+    if(!msMatches('reorder-brand-filter',g.brand)) return false;
     var matchingSkus=g.skus.filter(function(r){
-      if(fbaFilter && r.fba!==fbaFilter) return false;
+      if(!msMatches('reorder-fba-filter',r.fba)) return false;
       if(dosFilter==='critical' && r.dosBucket!=='critical') return false;
       if(dosFilter==='low' && r.dosBucket!=='low') return false;
       if(dosFilter==='medium' && r.dosBucket!=='medium') return false;
@@ -1695,24 +1836,25 @@ function renderReorderTable(){
 
   // Thead
   var th=document.getElementById('reorder-thead');
+  var R='reorder';
   th.innerHTML=
-    '<th data-w="90">OD SKU</th><th data-w="100">Brand</th>'+
-    '<th class="num" data-w="70">Case Qty</th>'+
-    '<th data-w="120">Amazon SKU</th><th data-w="260">Title</th><th data-w="80">FBA</th>'+
-    '<th class="num" data-w="60">Eaches</th>'+
-    '<th class="num" data-w="90" style="background:#1e4d2b;color:#fff">OD Available</th>'+
-    '<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">OD On Hand</th>'+
-    '<th class="num" data-w="70" style="background:#1e4d2b;color:#fff">OD On PO</th>'+
-    '<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">Avg Cost</th>'+
-    '<th class="num" data-w="90" style="background:#1a3a5c;color:#fff">AMZ Total</th>'+
-    '<th class="num" data-w="90" style="background:#1a3a5c;color:#fff">AMZ Total (OD)</th>'+
-    '<th class="num" data-w="60" style="background:#1a3a5c;color:#fff">DOS</th>'+
-    '<th class="num" data-w="80" style="background:#1a3a5c;color:#fff">Avg Daily</th>'+
-    '<th class="num" data-w="80" style="background:#5c2800;color:#fff">Sales Qty</th>'+
-    '<th class="num" data-w="80" style="background:#5c2800;color:#fff">Sales Qty (OD)</th>'+
-    '<th class="num" data-w="80" style="background:#5c2800;color:#fff">Profit</th>'+
-    '<th class="num" data-w="70" style="background:#5c2800;color:#fff">Margin</th>'+
-    '<th data-w="160">Comment</th>';
+    thIf(R,'OD SKU','<th data-w="90">OD SKU</th>')+thIf(R,'Brand','<th data-w="100">Brand</th>')+
+    thIf(R,'Case Qty','<th class="num" data-w="70">Case Qty</th>')+
+    thIf(R,'Amazon SKU','<th data-w="120">Amazon SKU</th>')+thIf(R,'Title','<th data-w="260">Title</th>')+thIf(R,'FBA','<th data-w="80">FBA</th>')+
+    thIf(R,'Eaches','<th class="num" data-w="60">Eaches</th>')+
+    thIf(R,'OD Available','<th class="num" data-w="90" style="background:#1e4d2b;color:#fff">OD Available</th>')+
+    thIf(R,'OD On Hand','<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">OD On Hand</th>')+
+    thIf(R,'OD On PO','<th class="num" data-w="70" style="background:#1e4d2b;color:#fff">OD On PO</th>')+
+    thIf(R,'Avg Cost','<th class="num" data-w="80" style="background:#1e4d2b;color:#fff">Avg Cost</th>')+
+    thIf(R,'AMZ Total','<th class="num" data-w="90" style="background:#1a3a5c;color:#fff">AMZ Total</th>')+
+    thIf(R,'AMZ Total (OD)','<th class="num" data-w="90" style="background:#1a3a5c;color:#fff">AMZ Total (OD)</th>')+
+    thIf(R,'DOS','<th class="num" data-w="60" style="background:#1a3a5c;color:#fff">DOS</th>')+
+    thIf(R,'Avg Daily','<th class="num" data-w="80" style="background:#1a3a5c;color:#fff">Avg Daily</th>')+
+    thIf(R,'Sales Qty','<th class="num" data-w="80" style="background:#5c2800;color:#fff">Sales Qty</th>')+
+    thIf(R,'Sales Qty (OD)','<th class="num" data-w="80" style="background:#5c2800;color:#fff">Sales Qty (OD)</th>')+
+    thIf(R,'Profit','<th class="num" data-w="80" style="background:#5c2800;color:#fff">Profit</th>')+
+    thIf(R,'Margin','<th class="num" data-w="70" style="background:#5c2800;color:#fff">Margin</th>')+
+    thIf(R,'Comment','<th data-w="160">Comment</th>');
 
   // Pagination by group
   var pages=Math.max(1,Math.ceil(filteredOrder.length/PAGE));
@@ -1730,32 +1872,32 @@ function renderReorderTable(){
       rows+='<tr>';
       if(i===0){
         rows+=
-          '<td rowspan="'+span+'" style="font-weight:600;font-size:12px;vertical-align:middle">'+esc(g.odSku)+'</td>'+
-          '<td rowspan="'+span+'" style="vertical-align:middle"><span class="badge badge-gray">'+esc(g.brand)+'</span></td>'+
-          '<td rowspan="'+span+'" class="num" style="vertical-align:middle">'+g.caseQty+'</td>';
+          (colVisible(R,'OD SKU')?'<td rowspan="'+span+'" style="font-weight:600;font-size:12px;vertical-align:middle">'+esc(g.odSku)+'</td>':'')+
+          (colVisible(R,'Brand')?'<td rowspan="'+span+'" style="vertical-align:middle"><span class="badge badge-gray">'+esc(g.brand)+'</span></td>':'')+
+          (colVisible(R,'Case Qty')?'<td rowspan="'+span+'" class="num" style="vertical-align:middle">'+g.caseQty+'</td>':'');
       }
       rows+=
-        '<td style="font-size:11px">'+esc(r.amzSku)+'</td>'+
-        '<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
-        '<td style="font-size:11px">'+esc(r.fba)+'</td>'+
-        '<td class="num">'+r.amazonEaches+'</td>';
+        tdIf(R,'Amazon SKU','<td style="font-size:11px">'+esc(r.amzSku)+'</td>')+
+        tdIf(R,'Title','<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>')+
+        tdIf(R,'FBA','<td style="font-size:11px">'+esc(r.fba)+'</td>')+
+        tdIf(R,'Eaches','<td class="num">'+r.amazonEaches+'</td>');
       if(i===0){
         rows+=
-          '<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odAvail||0).toLocaleString()+'</td>'+
-          '<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odOnHand||0).toLocaleString()+'</td>'+
-          '<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odOnPo||0).toLocaleString()+'</td>'+
-          '<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(g.odAvgCost?'$'+g.odAvgCost.toFixed(2):'—')+'</td>';
+          (colVisible(R,'OD Available')?'<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odAvail||0).toLocaleString()+'</td>':'')+
+          (colVisible(R,'OD On Hand')?'<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odOnHand||0).toLocaleString()+'</td>':'')+
+          (colVisible(R,'OD On PO')?'<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(+g.odOnPo||0).toLocaleString()+'</td>':'')+
+          (colVisible(R,'Avg Cost')?'<td rowspan="'+span+'" class="num" style="background:#e2efda;vertical-align:middle">'+(g.odAvgCost?'$'+g.odAvgCost.toFixed(2):'—')+'</td>':'');
       }
       rows+=
-        '<td class="num" style="background:#deeaf1">'+(r.amzTotal||0).toLocaleString()+'</td>'+
-        '<td class="num" style="background:#deeaf1">'+(r.amzTotalOd||0).toLocaleString()+'</td>'+
-        '<td class="num '+dosColor+'" style="'+(dosColor?'':'background:#deeaf1')+'">'+(r.dos||0)+'</td>'+
-        '<td class="num" style="background:#deeaf1">'+(r.avgDaily?r.avgDaily.toFixed(1):'—')+'</td>'+
-        '<td class="num" style="background:#fff2cc">'+(r.salesQty||0).toLocaleString()+'</td>'+
-        '<td class="num" style="background:#fff2cc">'+(r.salesQtyOd||0).toLocaleString()+'</td>'+
-        '<td class="num" style="background:#fff2cc">'+(r.profit?'$'+r.profit.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>'+
-        '<td class="num" style="background:#fff2cc">'+(r.margin?(r.margin*100).toFixed(1)+'%':'—')+'</td>'+
-        commentCell(r.amzSku)+
+        tdIf(R,'AMZ Total','<td class="num" style="background:#deeaf1">'+(r.amzTotal||0).toLocaleString()+'</td>')+
+        tdIf(R,'AMZ Total (OD)','<td class="num" style="background:#deeaf1">'+(r.amzTotalOd||0).toLocaleString()+'</td>')+
+        tdIf(R,'DOS','<td class="num '+dosColor+'" style="'+(dosColor?'':'background:#deeaf1')+'">'+(r.dos||0)+'</td>')+
+        tdIf(R,'Avg Daily','<td class="num" style="background:#deeaf1">'+(r.avgDaily?r.avgDaily.toFixed(1):'—')+'</td>')+
+        tdIf(R,'Sales Qty','<td class="num" style="background:#fff2cc">'+(r.salesQty||0).toLocaleString()+'</td>')+
+        tdIf(R,'Sales Qty (OD)','<td class="num" style="background:#fff2cc">'+(r.salesQtyOd||0).toLocaleString()+'</td>')+
+        tdIf(R,'Profit','<td class="num" style="background:#fff2cc">'+(r.profit?'$'+r.profit.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>')+
+        tdIf(R,'Margin','<td class="num" style="background:#fff2cc">'+(r.margin?(r.margin*100).toFixed(1)+'%':'—')+'</td>')+
+        (colVisible(R,'Comment')?commentCell(r.amzSku):'')+
       '</tr>';
     });
   });
@@ -1777,8 +1919,6 @@ function renderReorderTable(){
 function exportReorder(){
   var computed=computeReorderData();
   var groups=computed.groups, groupOrder=computed.groupOrder;
-  var brandFilter=document.getElementById('reorder-brand-filter').value;
-  var fbaFilter=document.getElementById('reorder-fba-filter').value;
   var dosFilter=document.getElementById('reorder-dos-filter').value;
   var search=(document.getElementById('reorder-search').value||'').toLowerCase();
   var rows=[];
@@ -1895,6 +2035,28 @@ renderReorderTable();
 // Then load fresh data from server (async, updates views when done)
 if(serverUrl && serverPwd){
   loadAllFromServer();
+  // Auto-refresh comments every 5 minutes so team comments stay live
+  setInterval(async function(){
+    if(!serverUrl||!serverPwd) return;
+    try{
+      var url=serverUrl.replace(/\/+$/,'')+'/api/data/comments?pwd='+encodeURIComponent(serverPwd);
+      var res=await fetch(url);
+      var text=await res.text();
+      var json=JSON.parse(text);
+      if(json.success && json.data!==null){
+        skuComments=json.data;
+        localStorage.setItem('amz_comments',JSON.stringify(skuComments));
+        // Silently refresh visible table to show updated comments
+        var activePage=document.querySelector('.page.active');
+        if(activePage){
+          var id=activePage.id;
+          if(id==='page-mapping') renderMappingTable();
+          else if(id==='page-shipment') renderShipmentTable();
+          else if(id==='page-reorder') renderReorderTable();
+        }
+      }
+    }catch(e){}
+  }, 5*60*1000);
 }else{
   setSyncStatus('Not connected — click ⚙ to set server URL & password','err');
 }
