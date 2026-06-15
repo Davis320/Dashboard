@@ -363,9 +363,13 @@ var serverUrl=localStorage.getItem('dash_server_url')||'';
 var serverPwd=localStorage.getItem('dash_server_pwd')||'';
 
 // Auto-detect: if served from Railway, use same origin as server URL
-if(!serverUrl && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.protocol.startsWith('file')){
-  serverUrl = window.location.origin;
-  serverPwd = serverPwd || 'Goodmorning2';
+if(window.location.protocol !== 'file:' && window.location.hostname !== 'localhost'){
+  if(!serverUrl){
+    serverUrl = window.location.origin;
+    serverPwd = serverPwd || 'Goodmorning2';
+    localStorage.setItem('dash_server_url', serverUrl);
+    localStorage.setItem('dash_server_pwd', serverPwd);
+  }
 }
 
 function setSyncStatus(msg, type){
@@ -400,8 +404,11 @@ async function loadAllFromServer(){
   for(var i=0;i<datasets.length;i++){
     var ds=datasets[i];
     try{
-      var res=await fetch(serverUrl+'/api/data/'+ds+'?pwd='+encodeURIComponent(serverPwd));
-      var json=await res.json();
+      var url=serverUrl.replace(/\/+$/,'')+'/api/data/'+ds+'?pwd='+encodeURIComponent(serverPwd);
+      var res=await fetch(url);
+      var text=await res.text();
+      var json;
+      try{ json=JSON.parse(text); }catch(e){ console.warn('Non-JSON from '+url+': '+text.slice(0,100)); continue; }
       if(json.success && json.data!==null){
         applyServerData(ds, json.data);
         loaded++;

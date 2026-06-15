@@ -47,14 +47,13 @@ function auth(req, res) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-// Serve dashboard
+// Serve dashboard HTML at root
 app.get('/', (req, res) => {
-  // If browser request, serve the dashboard HTML
-  const accept = req.headers.accept || '';
-  if (accept.includes('text/html')) {
-    return res.sendFile(path.join(__dirname, 'dashboard.html'));
-  }
-  // Otherwise return API health check
+  res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'Store Health Tracker API', pwd_configured: true });
 });
 
