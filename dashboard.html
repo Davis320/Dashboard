@@ -1894,7 +1894,6 @@ function exportOD(){
 function exportShipment(){
   var shipmentData=computeShipmentData();
   var expReceivedSet=new Set(inboundSkus);
-  var dosFilter=document.getElementById('ship-dos-filter').value;
   var zeroFilter=document.getElementById('ship-zero-filter').value;
   var receivedFilter=document.getElementById('ship-received-filter').value;
   var activeFilter=document.getElementById('ship-active-filter').value;
@@ -1902,7 +1901,7 @@ function exportShipment(){
 
   var filtered=shipmentData.filter(function(r){
     if(!msMatches('ship-brand-filter',r.brand)) return false;
-    if(dosFilter && r.dosBucket!==dosFilter) return false;
+    if(!msMatches('ship-dos-filter',r.dosBucket)) return false;
     if(!msMatches('ship-cat-filter',r.shipType)) return false;
     if(zeroFilter==='zero' && r.zeroSales!=='No Sales') return false;
     if(activeFilter && r.active!==activeFilter) return false;
@@ -2203,7 +2202,6 @@ function renderReorderTable(){
 function exportReorder(){
   var computed=computeReorderData();
   var groups=computed.groups, groupOrder=computed.groupOrder;
-  var dosFilter=document.getElementById('reorder-dos-filter').value;
   var search=(document.getElementById('reorder-search').value||'').toLowerCase();
   var rows=[];
   groupOrder.forEach(function(k){
