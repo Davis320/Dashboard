@@ -335,6 +335,11 @@ th.num{text-align:right}
           <button class="ms-btn" id="reorder-dos-filter-btn" data-label="All DOS" data-onchange="renderReorderTable" onclick="msOpen('reorder-dos-filter')"><span class="ms-label">All DOS</span></button>
           <div class="ms-dropdown" id="reorder-dos-filter-dd"></div>
         </div>
+        <select id="reorder-active-filter" onchange="renderReorderTable()">
+          <option value="">Active &amp; inactive</option>
+          <option value="Active">Active only</option>
+          <option value="Inactive">Inactive only</option>
+        </select>
         <div class="col-vis-wrap" id="colvis-reorder-wrap" style="position:relative">
           <button class="col-vis-btn" onclick="colVisOpen('reorder')" title="Show/hide columns">&#9636; Columns</button>
           <div class="col-vis-panel" id="colvis-reorder-panel"></div>
@@ -571,7 +576,75 @@ document.addEventListener('click',function(e){
 });
 
 // ── Column visibility ──
-var _colVis={};  // {tableId: {colName: boolean}}
+var _colOrder={};  // {tableId: [col names in order]}
+
+function colOrderInit(tableId, cols){
+  if(!_colOrder[tableId]){
+    var saved=JSON.parse(localStorage.getItem('col_order_'+tableId)||'null');
+    if(saved){
+      // Add any new cols not in saved order
+      var newCols=cols.filter(function(c){ return saved.indexOf(c)===-1; });
+      _colOrder[tableId]=saved.concat(newCols);
+    }else{
+      _colOrder[tableId]=cols.slice();
+    }
+  }
+}
+
+function colOrderGet(tableId, cols){
+  colOrderInit(tableId, cols);
+  // Filter to only include cols that exist in current list
+  var order=_colOrder[tableId].filter(function(c){ return cols.indexOf(c)>=0; });
+  cols.forEach(function(c){ if(order.indexOf(c)===-1) order.push(c); });
+  return order;
+}
+
+function enableColDrag(tableId, renderFn){
+  var thead=document.querySelector('#page-'+tableId+' thead tr, #reorder-thead');
+  if(tableId==='reorder') thead=document.getElementById('reorder-thead');
+  else if(tableId==='shipment') thead=document.getElementById('ship-thead');
+  if(!thead) return;
+  var ths=thead.querySelectorAll('th');
+  var dragSrc=null;
+  ths.forEach(function(th,i){
+    th.draggable=true;
+    th.style.cursor='grab';
+    th.addEventListener('dragstart',function(e){
+      dragSrc=i;
+      e.dataTransfer.effectAllowed='move';
+    });
+    th.addEventListener('dragover',function(e){
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      th.style.outline='2px solid #185FA5';
+    });
+    th.addEventListener('dragleave',function(){
+      th.style.outline='';
+    });
+    th.addEventListener('drop',function(e){
+      e.preventDefault();
+      th.style.outline='';
+      if(dragSrc===null||dragSrc===i) return;
+      // Reorder _colOrder
+      var order=_colOrder[tableId];
+      if(!order) return;
+      var visibleCols=Array.from(ths).map(function(t){ return t.textContent.replace(/[↑↓]/g,'').trim(); });
+      var fromCol=visibleCols[dragSrc];
+      var toCol=visibleCols[i];
+      var fi=order.indexOf(fromCol), ti=order.indexOf(toCol);
+      if(fi>=0&&ti>=0){
+        order.splice(fi,1);
+        order.splice(ti,0,fromCol);
+        localStorage.setItem('col_order_'+tableId,JSON.stringify(order));
+      }
+      dragSrc=null;
+      window[renderFn]();
+    });
+    th.addEventListener('dragend',function(){ th.style.outline=''; dragSrc=null; });
+  });
+}
+
+function colOrderFor(tableId){ return _colOrder[tableId]||[]; }
 
 function colVisInit(tableId, cols){
   if(!_colVis[tableId]){
@@ -1771,9 +1844,9 @@ function renderShipmentTable(){
     var dosColor=r.dosBucket==='0-30'?'red':(r.dosBucket==='31-60'?'amber':'');
     var dupAsin=(asinCount[r.asin]||0)>1;
     var received=receivedSet.has(r.odSku);
-    return '<tr>'+
+    return '<tr'+(dupAsin?' style="background:#fff0f0"':'')+'>'+
       tdIf(T,'ASIN','<td style="font-size:11px">'+asinLink(r.asin)+'</td>')+
-      tdIf(T,'SKU','<td style="font-size:12px;'+(dupAsin?'color:#C00000':'')+'">'+skuLink(r.sku)+'</td>')+
+      tdIf(T,'SKU','<td style="font-size:12px;font-weight:600;'+(dupAsin?'color:#C00000':'')+'">'+skuLink(r.sku)+'</td>')+
       tdIf(T,'Brand','<td><span class="badge badge-gray">'+esc(brand)+'</span></td>')+
       tdIf(T,'Category','<td style="font-size:12px;color:#555">'+esc(r.shipType||'')+'</td>')+
       tdIf(T,'Description','<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(r.title)+'">'+esc(r.title)+'</td>')+
@@ -1794,6 +1867,7 @@ function renderShipmentTable(){
     '</tr>';
   }).join('');
   document.getElementById('ship-body').innerHTML=rows || '<tr><td colspan="18" style="text-align:center;padding:1rem;color:#888">No rows match your filters.</td></tr>';
+  setTimeout(function(){ enableColDrag('shipment','renderShipmentTable'); },0);
   document.getElementById('ship-page-info').textContent='Page '+(shipPage+1)+' of '+pages;
   document.getElementById('ship-prev').disabled=shipPage===0;
   document.getElementById('ship-next').disabled=shipPage>=pages-1;
@@ -1898,8 +1972,8 @@ function computeReorderData(){
     else if(dos>=30&&dos<=60) dosBucket='medium';
     else if(dos===0) dosBucket='nodata';
     return{
-      amzSku:m.sku, odSku:m.odSku||'', title:m.title||'', fba:m.fba||m.category||'',
-      brand:od.brand||m.brand||'',
+      amzSku:m.sku, asin:m.asin||'', odSku:m.odSku||'', title:m.title||'', fba:m.fba||m.category||'',
+      brand:od.brand||m.brand||'', active:m.active||'Active',
       amazonEaches:amazonEaches, caseQty:caseQty,
       amzTotal:amzTotal, amzTotalOd:amzTotalOd,
       dos:dos, dosBucket:dosBucket, avgDaily:avgDaily,
@@ -1972,6 +2046,7 @@ function renderReorderTable(){
   msInit('reorder-dos-filter',['critical','low','medium','ok'],'All DOS');
 
   var search=(document.getElementById('reorder-search').value||'').toLowerCase();
+  var activeFilter=document.getElementById('reorder-active-filter').value;
   // Filter groups — keep group if any SKU matches
   var filteredOrder=groupOrder.filter(function(k){
     var g=groups[k];
@@ -1979,7 +2054,8 @@ function renderReorderTable(){
     var matchingSkus=g.skus.filter(function(r){
       if(!msMatches('reorder-fba-filter',r.fba)) return false;
       if(!msMatches('reorder-dos-filter',r.dosBucket)) return false;
-      if(search){ var hay=(r.amzSku+' '+r.odSku+' '+r.title+' '+r.brand).toLowerCase(); if(hay.indexOf(search)===-1) return false; }
+      if(activeFilter && r.active!==activeFilter) return false;
+      if(search){ var hay=(r.amzSku+' '+r.asin+' '+r.odSku+' '+r.title+' '+r.brand).toLowerCase(); if(hay.indexOf(search)===-1) return false; }
       return true;
     });
     g._filteredSkus=matchingSkus;
@@ -2110,6 +2186,7 @@ function renderReorderTable(){
   });
 
   document.getElementById('reorder-body').innerHTML=rows||'<tr><td colspan="20" style="text-align:center;padding:1rem;color:#888">No rows match filters.</td></tr>';
+  setTimeout(function(){ enableColDrag('reorder','renderReorderTable'); },0);
 
   // Pagination controls
   var pg=document.getElementById('reorder-pagination');
