@@ -207,10 +207,10 @@ th.num{text-align:right}
         <button class="expbtn" onclick="exportMapping()">&#8659; Export Excel</button>
       </div>
       <div class="tbl-wrap">
-        <table>
+        <table id="mapping-table" class="resizable-table">
           <thead><tr>
-            <th>Active</th><th>Brand</th><th>ASIN</th><th>Amazon SKU</th><th>OD SKU</th>
-            <th>Amazon title</th><th>Eaches</th><th>FBA</th><th>Category</th><th>Comment</th><th></th>
+            <th data-w="70">Active</th><th data-w="100">Brand</th><th data-w="120">ASIN</th><th data-w="120">Amazon SKU</th><th data-w="100">OD SKU</th>
+            <th data-w="260">Amazon title</th><th data-w="70">Eaches</th><th data-w="80">FBA</th><th data-w="100">Category</th><th data-w="160">Comment</th><th data-w="40"></th>
           </tr></thead>
           <tbody id="mapping-body"></tbody>
         </table>
@@ -241,11 +241,11 @@ th.num{text-align:right}
       </div>
       <div class="od-kpis" id="od-kpis-wrap"></div>
       <div class="tbl-wrap">
-        <table>
+        <table id="od-table" class="resizable-table">
           <thead><tr>
-            <th>Brand</th><th>OD SKU</th><th>Description</th><th>Category</th>
-            <th>Available</th><th>On Hand</th><th>On PO</th><th>Avg Cost</th>
-            <th>Amazon ASINs</th><th>Amazon Title</th>
+            <th data-w="100">Brand</th><th data-w="100">OD SKU</th><th data-w="260">Description</th><th data-w="100">Category</th>
+            <th data-w="90">Available</th><th data-w="90">On Hand</th><th data-w="80">On PO</th><th data-w="90">Avg Cost</th>
+            <th data-w="120">Amazon ASINs</th><th data-w="200">Amazon Title</th>
           </tr></thead>
           <tbody id="od-body"></tbody>
         </table>
@@ -348,7 +348,7 @@ th.num{text-align:right}
         <button class="expbtn" onclick="exportReorderOrder()" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">&#128666; Export Order</button>
       </div>
       <div style="overflow-x:auto;overflow-y:auto;max-height:70vh">
-        <table class="data-table">
+        <table id="reorder-table" class="data-table resizable-table">
           <thead><tr id="reorder-thead"></tr></thead>
           <tbody id="reorder-body"></tbody>
         </table>
@@ -1542,6 +1542,7 @@ function renderMappingTable(){
     rows+='</tr>';
   });
   document.getElementById('mapping-body').innerHTML=rows || '<tr><td colspan="11" style="text-align:center;padding:1rem;color:#888">No rows match your filters.</td></tr>';
+  makeResizable('mapping-table');
   document.getElementById('map-page-info').textContent='Page '+(mapPage+1)+' of '+pages;
   document.getElementById('map-prev').disabled=mapPage===0;
   document.getElementById('map-next').disabled=mapPage>=pages-1;
@@ -1606,6 +1607,7 @@ function renderODTable(){
     '</tr>';
   }).join('');
   document.getElementById('od-body').innerHTML=rows || '<tr><td colspan="10" style="text-align:center;padding:1rem;color:#888">No rows match your filters.</td></tr>';
+  makeResizable('od-table');
   document.getElementById('od-page-info').textContent='Page '+(odPage+1)+' of '+pages;
   document.getElementById('od-prev').disabled=odPage===0;
   document.getElementById('od-next').disabled=odPage>=pages-1;
@@ -1868,7 +1870,7 @@ function renderShipmentTable(){
     '</tr>';
   }).join('');
   document.getElementById('ship-body').innerHTML=rows || '<tr><td colspan="18" style="text-align:center;padding:1rem;color:#888">No rows match your filters.</td></tr>';
-  setTimeout(function(){ enableColDrag('shipment','renderShipmentTable'); },0);
+  setTimeout(function(){ enableColDrag('shipment','renderShipmentTable'); makeResizable('ship-table'); },0);
   document.getElementById('ship-page-info').textContent='Page '+(shipPage+1)+' of '+pages;
   document.getElementById('ship-prev').disabled=shipPage===0;
   document.getElementById('ship-next').disabled=shipPage>=pages-1;
@@ -2186,7 +2188,7 @@ function renderReorderTable(){
   });
 
   document.getElementById('reorder-body').innerHTML=rows||'<tr><td colspan="20" style="text-align:center;padding:1rem;color:#888">No rows match filters.</td></tr>';
-  setTimeout(function(){ enableColDrag('reorder','renderReorderTable'); },0);
+  setTimeout(function(){ enableColDrag('reorder','renderReorderTable'); makeResizable('reorder-table'); },0);
 
   // Pagination controls
   var pg=document.getElementById('reorder-pagination');
