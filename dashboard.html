@@ -577,6 +577,7 @@ document.addEventListener('click',function(e){
 
 // ── Column visibility ──
 var _colOrder={};  // {tableId: [col names in order]}
+var _colVis={};    // {tableId: {colName: boolean}}
 
 function colOrderInit(tableId, cols){
   if(!_colOrder[tableId]){
