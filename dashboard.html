@@ -1698,9 +1698,13 @@ function computeShipmentData(){
     gp=denom!==0?(profit/denom):null;
     var suggestedSend=Math.max(0,Math.round(sales30-amazonTotal));
 
+    // Calculate DOS from 30-day sales (more accurate than inventory report)
+    // DOS = Amazon Total ÷ Daily Sales Rate = amazonTotal ÷ (sales30 / 30)
+    var calcDos = sales30>0 ? Math.round(amazonTotal*30/sales30) : (daysOfSupply||0);
+
     return{
       sku:m.sku, asin:m.asin, title:m.title, brand:m.brand||'Unassigned', active:m.active||'Active',
-      shipType:category, dosBucket:dosBucket(daysOfSupply),
+      shipType:category, dosBucket:dosBucket(calcDos), dos:calcDos,
       amazonTotal:amazonTotal, amazonInbound:amazonInbound, amzOdUnits:amzOdUnits,
       sales30:sales30, zeroSales:(sales30===0?'No Sales':''),
       odAvailAmz:odAvailAmz, odAvail:odOnHand,
@@ -1813,10 +1817,11 @@ function renderShipmentTable(){
     '<div class="kpi"><p>Zero-sales SKUs</p><h2 class="'+(zeroCount>0?'red':'green')+'">'+zeroCount+'</h2></div>';
 
   var th=document.getElementById('ship-thead');
-  // Build ASIN duplicate count map — SKU is red if its ASIN has >1 SKU in mapping
+  // Build ASIN duplicate count map — only count non-Seller SKUs
   var asinCount={};
   mappingData.forEach(function(m){
     if(!m.asin) return;
+    if((m.fba||m.category||'').toLowerCase()==='seller') return;
     asinCount[m.asin]=(asinCount[m.asin]||0)+1;
   });
 
@@ -1853,7 +1858,7 @@ function renderShipmentTable(){
       tdIf(T,'Brand','<td><span class="badge badge-gray">'+esc(brand)+'</span></td>')+
       tdIf(T,'Category','<td style="font-size:12px;color:#555">'+esc(r.shipType||'')+'</td>')+
       tdIf(T,'Description','<td class="wrap-cell" style="font-size:11px;color:#444" title="'+esc(r.title)+'">'+esc(r.title)+'</td>')+
-      tdIf(T,'DOS Bucket','<td class="'+dosColor+'">'+esc(r.dosBucket)+'</td>')+
+      tdIf(T,'DOS Bucket','<td class="'+dosColor+'">'+esc(r.dosBucket)+(r.dos?' <span style="font-size:10px;opacity:0.7">('+r.dos+'d)</span>':'')+'</td>')+
       tdIf(T,'Amazon Total','<td class="num">'+(r.amazonTotal||0).toLocaleString()+'</td>')+
       tdIf(T,'Amazon Inbound','<td class="num">'+(r.amazonInbound||0).toLocaleString()+'</td>')+
       tdIf(T,'AMZ Total (OD Units)','<td class="num">'+(r.amzOdUnits||0).toLocaleString()+'</td>')+
