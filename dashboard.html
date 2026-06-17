@@ -133,6 +133,7 @@ th.num{text-align:right}
         <button class="nav-btn" onclick="showPage('mapping',this)">Product mapping</button>
         <button class="nav-btn" onclick="showPage('od',this)">OD inventory</button>
         <button class="nav-btn" onclick="showPage('shipment',this)">Shipment</button>
+        <button class="nav-btn" onclick="showPage('buildship',this)">Build Shipment</button>
         <button class="nav-btn" onclick="showPage('reorder',this)">Reorder</button>
         <button class="nav-btn" onclick="showPage('uploads',this)">Uploads</button>
       </nav>
@@ -296,6 +297,10 @@ th.num{text-align:right}
           <div class="col-vis-panel" id="colvis-shipment-panel"></div>
         </div>
         <button class="expbtn" onclick="exportShipment()">&#8659; Export Excel</button>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="ship-exclude-pushed" onchange="renderShipmentTable()"> Exclude pushed SKUs
+        </label>
+        <button onclick="pushToShipment()" style="padding:6px 14px;border-radius:8px;border:none;background:#1D6335;color:#fff;cursor:pointer;font-size:13px;font-weight:600">&#128666; Push to Build Shipment</button>
       </div>
       <div id="ship-kpis" class="kpi-grid"></div>
       <div class="tbl-wrap">
@@ -313,6 +318,22 @@ th.num{text-align:right}
       <div id="ship-empty" style="text-align:center;padding:2rem;color:#888">
         Upload your Product mapping, Inventory Report, OD inventory, and Comparison Report on the Uploads tab to see shipment suggestions.
       </div>
+    </div>
+  </div>
+
+  <!-- BUILD SHIPMENT -->
+  <div id="page-buildship" class="page">
+    <div class="section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <div class="sec-title" style="margin-bottom:0">Build Shipment</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="exportBuildShipment()" style="padding:6px 14px;border-radius:8px;border:none;background:#185FA5;color:#fff;cursor:pointer;font-size:13px">&#8659; Export Excel</button>
+          <button onclick="clearBuildShipment()" style="padding:6px 14px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#A32D2D;cursor:pointer;font-size:13px;font-weight:600">&#10005; Clear All</button>
+        </div>
+      </div>
+      <div id="buildship-kpis" class="kpi-grid" style="margin-bottom:1rem"></div>
+      <div id="buildship-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1rem"></div>
+      <div id="buildship-content"></div>
     </div>
   </div>
 
@@ -813,7 +834,7 @@ function applyServerData(dataset, data){
 function refreshAllViews(){
   populateMappingBrandFilter(); populateRoiBrandFilter();
   populateODFilters(); populateShipBrandFilter(); populateShipCatFilter();
-  renderMappingTable(); renderODTable(); renderRoi(); renderShipmentTable(); renderReorderTable();
+  renderMappingTable(); renderODTable(); renderRoi(); renderShipmentTable(); renderReorderTable(); renderBuildShipment();
   updateUploadStatuses();
 }
 
@@ -881,6 +902,7 @@ function showPage(id,btn){
   if(id==='od') renderODTable();
   if(id==='roi') renderRoi();
   if(id==='shipment') renderShipmentTable();
+  if(id==='buildship') renderBuildShipment();
 }
 
 // ── File upload ──
@@ -1761,6 +1783,141 @@ function exportReorderOrder(){
   renderReorderTable();
 }
 
+function shipCheckAll(checked){
+  document.querySelectorAll('#ship-body input[type=checkbox]').forEach(function(cb){
+    cb.checked=checked;
+    window._shipChecked[cb.dataset.sku]=checked;
+  });
+}
+
+function pushToShipment(){
+  var shipData=computeShipmentData();
+  var pushed=0;
+  shipData.forEach(function(r){
+    if(!window._shipChecked[r.sku]) return;
+    var qty=+(window._shipQty[r.sku]||0)||0;
+    _buildShipment[r.sku]={
+      sku:r.sku, asin:r.asin, title:r.title,
+      brand:r.brand, category:r.shipType||'Uncategorized',
+      pushedQty:qty, freeQty:(_buildShipment[r.sku]&&_buildShipment[r.sku].freeQty)||''
+    };
+    pushed++;
+  });
+  if(!pushed){ alert('No rows checked. Check the boxes on rows you want to push.'); return; }
+  // Clear selection state
+  window._shipChecked={};
+  window._shipQty={};
+  renderShipmentTable();
+  renderBuildShipment();
+  // Switch to Build Shipment tab
+  var btn=document.querySelector('.nav-btn[onclick*="buildship"]');
+  if(btn){ showPage('buildship',btn); }
+}
+
+function renderBuildShipment(){
+  var items=Object.values(_buildShipment);
+  if(!items.length){
+    document.getElementById('buildship-tabs').innerHTML='';
+    document.getElementById('buildship-content').innerHTML='<p style="color:#888;padding:1rem">No SKUs pushed yet. Go to Shipment tab, check rows, enter Ship Qty, and click Push to Build Shipment.</p>';
+    document.getElementById('buildship-kpis').innerHTML='';
+    return;
+  }
+
+  // Group by category
+  var cats={};
+  items.forEach(function(r){
+    var cat=r.category||'Uncategorized';
+    if(!cats[cat]) cats[cat]=[];
+    cats[cat].push(r);
+  });
+  var catNames=Object.keys(cats).sort();
+  if(!_buildShipTab||!cats[_buildShipTab]) _buildShipTab=catNames[0];
+
+  // KPIs
+  var totalSkus=items.length;
+  var totalQty=items.reduce(function(a,r){ return a+(+r.freeQty||+r.pushedQty||0); },0);
+  document.getElementById('buildship-kpis').innerHTML=
+    '<div class="kpi"><p>Total SKUs</p><h2>'+totalSkus+'</h2></div>'+
+    '<div class="kpi"><p>Categories</p><h2>'+catNames.length+'</h2></div>'+
+    '<div class="kpi"><p>Total Units</p><h2>'+totalQty.toLocaleString()+'</h2></div>';
+
+  // Category tabs
+  document.getElementById('buildship-tabs').innerHTML=catNames.map(function(cat){
+    var active=cat===_buildShipTab;
+    return '<button onclick="_buildShipTab=\''+esc(cat)+'\';renderBuildShipment()" style="padding:6px 14px;border-radius:8px;border:2px solid '+(active?'#1a1a1a':'#ddd')+';background:'+(active?'#1a1a1a':'#fff')+';color:'+(active?'#fff':'#333')+';cursor:pointer;font-size:13px;font-weight:'+(active?'600':'400')+'">'+esc(cat)+' <span style="opacity:0.7">('+cats[cat].length+')</span></button>';
+  }).join('');
+
+  // Table for selected category
+  var catItems=cats[_buildShipTab]||[];
+  var catQty=catItems.reduce(function(a,r){ return a+(+r.freeQty||+r.pushedQty||0); },0);
+
+  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">'+
+    '<span style="font-size:13px;color:#888">'+catItems.length+' SKUs · '+catQty.toLocaleString()+' total units</span>'+
+  '</div>'+
+  '<div style="overflow-x:auto;overflow-y:auto;max-height:65vh"><table class="resizable-table" id="buildship-table" style="table-layout:fixed;width:max-content;min-width:100%">'+
+  '<thead><tr style="background:#1a1a1a;color:#fff">'+
+    '<th data-w="40" style="text-align:center"><input type="checkbox" onchange="buildShipCheckAll(this.checked)"></th>'+
+    '<th data-w="140">SKU</th>'+
+    '<th data-w="130">ASIN</th>'+
+    '<th data-w="280">Title</th>'+
+    '<th data-w="100">Brand</th>'+
+    '<th class="num" data-w="100" style="background:#1D6335;color:#fff">Pushed Qty</th>'+
+    '<th class="num" data-w="110" style="background:#1D6335;color:#fff">Free-form Qty</th>'+
+    '<th class="num" data-w="100" style="background:#1D6335;color:#fff">Total Qty</th>'+
+  '</tr></thead><tbody>';
+
+  catItems.sort(function(a,b){ return String(a.asin).localeCompare(String(b.asin))||String(a.sku).localeCompare(String(b.sku)); });
+
+  if(!window._buildChecked) window._buildChecked={};
+  catItems.forEach(function(r){
+    var totalQty=(+r.freeQty||0)+(+r.pushedQty||0);
+    html+='<tr>'+
+      '<td style="text-align:center"><input type="checkbox" data-sku="'+esc(r.sku)+'" '+(window._buildChecked[r.sku]?'checked':'')+' onchange="window._buildChecked[this.dataset.sku]=this.checked"></td>'+
+      '<td style="font-size:11px">'+skuLink(r.sku)+'</td>'+
+      '<td style="font-size:11px">'+asinLink(r.asin)+'</td>'+
+      '<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
+      '<td><span class="badge badge-gray">'+esc(r.brand)+'</span></td>'+
+      '<td class="num" style="background:#eaf3ee">'+(r.pushedQty||0)+'</td>'+
+      '<td style="background:#eaf3ee"><input type="number" min="0" placeholder="0" value="'+(r.freeQty||'')+'" data-sku="'+esc(r.sku)+'" style="width:80px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" oninput="_buildShipment[this.dataset.sku].freeQty=this.value;renderBuildShipment()"></td>'+
+      '<td class="num" style="background:#eaf3ee;font-weight:600">'+totalQty+'</td>'+
+    '</tr>';
+  });
+
+  html+='</tbody></table></div>';
+  document.getElementById('buildship-content').innerHTML=html;
+  makeResizable('buildship-table');
+}
+
+function buildShipCheckAll(checked){
+  document.querySelectorAll('#buildship-table tbody input[type=checkbox]').forEach(function(cb){
+    cb.checked=checked;
+    window._buildChecked[cb.dataset.sku]=checked;
+  });
+}
+
+function clearBuildShipment(){
+  if(!confirm('Clear all items from Build Shipment? This cannot be undone.')) return;
+  _buildShipment={};
+  window._buildChecked={};
+  _buildShipTab='';
+  renderBuildShipment();
+}
+
+function exportBuildShipment(){
+  var items=Object.values(_buildShipment);
+  if(!items.length){ alert('Nothing to export.'); return; }
+  var rows=items.map(function(r){
+    return{
+      'Category':r.category,'Brand':r.brand,'SKU':r.sku,'ASIN':r.asin,'Title':r.title,
+      'Pushed Qty':r.pushedQty||0,
+      'Free-form Qty':r.freeQty||'',
+      'Total Qty':(+r.freeQty||0)+(+r.pushedQty||0)
+    };
+  });
+  rows.sort(function(a,b){ return String(a.Category).localeCompare(String(b.Category))||String(a.ASIN).localeCompare(String(b.ASIN)); });
+  exportXlsx(rows,'Build_Shipment_'+new Date().toISOString().slice(0,10));
+}
+
 function shipSort(col){ _shipSort.dir=_shipSort.col===col?-_shipSort.dir:1; _shipSort.col=col; renderShipmentTable(); }
 function reorderSort(col){ _reorderSort.dir=_reorderSort.col===col?-_reorderSort.dir:1; _reorderSort.col=col; renderReorderTable(); }
 
@@ -1778,7 +1935,7 @@ function renderShipmentTable(){
   populateShipBrandFilter(); populateShipCatFilter();
 
   // Column visibility
-  var shipCols=['ASIN','SKU','Brand','Category','Description','DOS Bucket','Amazon Total','Amazon Inbound','AMZ Total (OD Units)','30 Day Sales','Zero Sales','OD Available (AMZ Qty)','OD Available','GP','OD SKU','Amazon Eaches','OD Unit Qty','Received Wk','Comment'];
+  var shipCols=['Select','ASIN','SKU','Brand','Category','Description','DOS Bucket','Amazon Total','Amazon Inbound','AMZ Total (OD Units)','30 Day Sales','Zero Sales','OD Available (AMZ Qty)','OD Available','GP','OD SKU','Amazon Eaches','OD Unit Qty','Received Wk','Ship Qty','Comment'];
   colVisInit('shipment', shipCols);
   document.getElementById('colvis-shipment-panel').innerHTML=colVisPanel('shipment', shipCols);
 
@@ -1790,6 +1947,7 @@ function renderShipmentTable(){
   var zeroFilter=document.getElementById('ship-zero-filter').value;
   var receivedFilter=document.getElementById('ship-received-filter').value;
   var activeFilter=document.getElementById('ship-active-filter').value;
+  var excludePushed=document.getElementById('ship-exclude-pushed').checked;
 
   var filtered=shipmentData.filter(function(r){
     if(!msMatches('ship-brand-filter',r.brand)) return false;
@@ -1797,6 +1955,7 @@ function renderShipmentTable(){
     if(!msMatches('ship-cat-filter',r.shipType)) return false;
     if(zeroFilter==='zero' && r.zeroSales!=='No Sales') return false;
     if(activeFilter && r.active!==activeFilter) return false;
+    if(excludePushed && _buildShipment[r.sku]) return false;
     var isReceived=receivedSet.has(r.odSku);
     if(receivedFilter==='yes' && !isReceived) return false;
     if(receivedFilter==='no' && isReceived) return false;
@@ -1826,10 +1985,15 @@ function renderShipmentTable(){
   });
 
   var ss=_shipSort;
+  // Init ship select/qty state
+  if(!window._shipChecked) window._shipChecked={};
+  if(!window._shipQty) window._shipQty={};
+
   var T='shipment';
   function sth(label,col,cls,style){ return thIf(T,label,'<th '+(cls?'class="'+cls+'" ':'')+sc(col,ss,'ship')+(style?' style="cursor:pointer;user-select:none;'+style+'"':' style="cursor:pointer;user-select:none"')+'>'+label+sa(col,ss)+'</th>'); }
 
   th.innerHTML=
+    thIf(T,'Select','<th data-w="40" style="text-align:center"><input type="checkbox" title="Select all" onchange="shipCheckAll(this.checked)"></th>')+
     sth('ASIN','asin')+sth('SKU','sku')+sth('Brand','brand')+sth('Category','shipType')+sth('Description','title')+
     sth('DOS Bucket','dosBucket')+
     sth('Amazon Total','amazonTotal','num')+sth('Amazon Inbound','amazonInbound','num')+sth('AMZ Total (OD Units)','amzOdUnits','num')+
@@ -1838,6 +2002,7 @@ function renderShipmentTable(){
     sth('GP','gp','num')+
     sth('OD SKU','odSku')+sth('Amazon Eaches','amazonEaches','num')+sth('OD Unit Qty','odUnitQty','num')+
     sth('Received Wk','receivedWk')+
+    thIf(T,'Ship Qty','<th data-w="90" style="background:#1D6335;color:#fff;cursor:default">Ship Qty</th>')+
     thIf(T,'Comment','<th data-w="160">Comment</th>');
 
   var sorted=sortRows(filtered, ss.col, ss.dir);
@@ -1852,7 +2017,9 @@ function renderShipmentTable(){
     var dosColor=r.dosBucket==='0-30'?'red':(r.dosBucket==='31-60'?'amber':'');
     var dupAsin=(asinCount[r.asin]||0)>1;
     var received=receivedSet.has(r.odSku);
-    return '<tr'+(dupAsin?' style="background:#fff0f0"':'')+'>'+
+    var isPushed=!!_buildShipment[r.sku];
+    return '<tr'+(dupAsin?' style="background:#fff0f0"':isPushed?' style="background:#eaf3de"':'')+'>'+
+      tdIf(T,'Select','<td style="text-align:center"><input type="checkbox" data-sku="'+esc(r.sku)+'" '+(window._shipChecked[r.sku]?'checked':'')+' onchange="window._shipChecked[this.dataset.sku]=this.checked"></td>')+
       tdIf(T,'ASIN','<td style="font-size:11px">'+asinLink(r.asin)+'</td>')+
       tdIf(T,'SKU','<td style="font-size:12px;font-weight:600;'+(dupAsin?'color:#C00000':'')+'">'+skuLink(r.sku)+'</td>')+
       tdIf(T,'Brand','<td><span class="badge badge-gray">'+esc(brand)+'</span></td>')+
@@ -1871,6 +2038,7 @@ function renderShipmentTable(){
       tdIf(T,'Amazon Eaches','<td class="num">'+(r.amazonEaches||0).toLocaleString()+'</td>')+
       tdIf(T,'OD Unit Qty','<td class="num">'+(r.odUnitQty||0).toLocaleString()+'</td>')+
       tdIf(T,'Received Wk','<td style="text-align:center;font-size:14px">'+(received?'<span style="color:#1D6335;font-weight:700">✓</span>':'')+'</td>')+
+      tdIf(T,'Ship Qty','<td style="background:#eaf3ee"><input type="number" min="0" placeholder="0" value="'+(window._shipQty[r.sku]||'')+'" data-sku="'+esc(r.sku)+'" style="width:70px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" oninput="window._shipQty[this.dataset.sku]=this.value"></td>')+
       (colVisible(T,'Comment')?commentCell(r.sku):'')+
     '</tr>';
   }).join('');
@@ -1944,6 +2112,8 @@ var _shipSort={col:null,dir:1};
 var _reorderSort={col:null,dir:1};
 var _reorderQty={};      // {odSku: qty string}
 var _reorderChecked={};  // {odSku: bool}
+var _buildShipment={};   // {sku: {asin, title, category, pushedQty, freeQty}}
+var _buildShipTab='';    // currently selected category tab
 
 function computeReorderData(){
   var invBySku={};
