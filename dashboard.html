@@ -1903,7 +1903,7 @@ function renderBuildShipment(){
       '<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
       '<td><span class="badge badge-gray">'+esc(r.brand)+'</span></td>'+
       '<td class="num" style="background:#eaf3ee;font-weight:600">'+pushedQty.toLocaleString()+'</td>'+
-      '<td style="background:#eaf3ee"><input type="number" min="1" placeholder="e.g. 12" value="'+(r.skidQty||'')+'" data-sku="'+esc(r.sku)+'" style="width:80px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" oninput="_buildShipment[this.dataset.sku].skidQty=this.value;renderBuildShipment()"></td>'+
+      '<td style="background:#eaf3ee"><input type="number" min="1" step="1" placeholder="e.g. 12" value="'+(r.skidQty||'')+'" data-sku="'+esc(r.sku)+'" style="width:80px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" onchange="_buildShipment[this.dataset.sku].skidQty=this.value;renderBuildShipment()"></td>'+
       '<td class="num" style="background:#eaf3ee;font-weight:600">'+(totalSkids||'—')+'</td>'+
     '</tr>';
   });
@@ -2448,7 +2448,7 @@ function exportXlsx(rows,filename){
     rows.forEach(function(r){var v=String(r[k]||'');if(v.length>max)max=v.length;});
     return{wch:Math.min(max+2,60)};
   });
-  XLSX.writeFile(wb,filename+'_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  XLSX.writeFile(wb, filename.endsWith('.xlsx')?filename:filename+'.xlsx');
 }
 
 // ── Helpers ──
