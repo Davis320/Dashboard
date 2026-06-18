@@ -472,11 +472,15 @@ var compReportData=JSON.parse(localStorage.getItem('amz_compreport')||'null');
 var plReportData=JSON.parse(localStorage.getItem('amz_plreport')||'[]');
 var inboundSkus=JSON.parse(localStorage.getItem('amz_inbound')||'[]'); // array of OD SKUs received this week
 var skuComments=JSON.parse(localStorage.getItem('amz_comments')||'{}');
-// Reset reorder col visibility if it predates ASIN/Select/Order Qty columns
+// Reset col visibility if it predates new columns
 (function(){
   var saved=JSON.parse(localStorage.getItem('col_vis_reorder')||'null');
   if(saved && (saved['ASIN']===undefined||saved['Select']===undefined||saved['Order Qty']===undefined)){
     localStorage.removeItem('col_vis_reorder');
+  }
+  var roiSaved=JSON.parse(localStorage.getItem('col_vis_roi')||'null');
+  if(roiSaved && roiSaved['Comment']===undefined){
+    localStorage.removeItem('col_vis_roi');
   }
 })();
 
