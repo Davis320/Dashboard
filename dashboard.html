@@ -748,8 +748,8 @@ function saveComment(){
   localStorage.setItem('amz_comments',JSON.stringify(skuComments));
   syncToServer('comments',skuComments);
   closeCommentPopup();
-  // Refresh current visible table
-  renderMappingTable(); renderShipmentTable(); renderReorderTable();
+  // Refresh all visible tables including ROI
+  renderMappingTable(); renderShipmentTable(); renderReorderTable(); renderRoi();
 }
 document.addEventListener('click',function(e){
   var popup=document.getElementById('comment-popup');
@@ -2548,6 +2548,7 @@ if(serverUrl && serverPwd){
           if(id==='page-mapping') renderMappingTable();
           else if(id==='page-shipment') renderShipmentTable();
           else if(id==='page-reorder') renderReorderTable();
+          else if(id==='page-roi') renderRoi();
         }
       }
     }catch(e){}
