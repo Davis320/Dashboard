@@ -479,8 +479,10 @@ var skuComments=JSON.parse(localStorage.getItem('amz_comments')||'{}');
     localStorage.removeItem('col_vis_reorder');
   }
   var roiSaved=JSON.parse(localStorage.getItem('col_vis_roi')||'null');
-  if(roiSaved && roiSaved['Comment']===undefined){
-    localStorage.removeItem('col_vis_roi');
+  if(roiSaved){
+    // Force Comment visible and save back
+    roiSaved['Comment']=true;
+    localStorage.setItem('col_vis_roi', JSON.stringify(roiSaved));
   }
 })();
 
@@ -675,19 +677,17 @@ function colOrderFor(tableId){ return _colOrder[tableId]||[]; }
 function colVisInit(tableId, cols){
   if(!_colVis[tableId]){
     var saved=JSON.parse(localStorage.getItem('col_vis_'+tableId)||'null');
-    // If saved state has columns that no longer exist, reset it
     if(saved){
-      var savedKeys=Object.keys(saved);
-      var hasNew=cols.some(function(c){ return saved[c]===undefined; });
-      if(hasNew){
-        // New columns added — merge, defaulting new ones to true
-        cols.forEach(function(c){ if(saved[c]===undefined) saved[c]=true; });
-      }
+      // Add any new cols not in saved state as visible
+      cols.forEach(function(c){ if(saved[c]===undefined) saved[c]=true; });
       _colVis[tableId]=saved;
     }else{
       _colVis[tableId]={};
       cols.forEach(function(c){ _colVis[tableId][c]=true; });
     }
+  }else{
+    // Ensure any newly added cols are visible even if already initialized
+    cols.forEach(function(c){ if(_colVis[tableId][c]===undefined) _colVis[tableId][c]=true; });
   }
 }
 
