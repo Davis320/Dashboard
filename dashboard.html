@@ -1801,7 +1801,7 @@ function pushToShipment(){
     if(!window._shipChecked[r.sku]) return;
     var qty=+(window._shipQty[r.sku]||0)||0;
     _buildShipment[r.sku]={
-      sku:r.sku, asin:r.asin, title:r.title,
+      sku:r.sku, asin:r.asin, odSku:r.odSku||'', title:r.title,
       brand:r.brand, category:r.shipType||'Uncategorized',
       pushedQty:qty,
       skidQty:(_buildShipment[r.sku]&&_buildShipment[r.sku].skidQty)||''
@@ -1843,7 +1843,7 @@ function renderBuildShipment(){
   var totalUnits=items.reduce(function(a,r){ return a+(+r.pushedQty||0); },0);
   var totalSkids=items.reduce(function(a,r){
     var skidQty=+r.skidQty||0;
-    return a+(skidQty>0?Math.ceil((+r.pushedQty||0)/skidQty):0);
+    return a+(skidQty>0?(Math.round((+r.pushedQty||0)/skidQty*100)/100):0);
   },0);
   document.getElementById('buildship-kpis').innerHTML=
     '<div class="kpi"><p>Total SKUs</p><h2>'+totalSkus+'</h2></div>'+
@@ -1888,6 +1888,7 @@ function renderBuildShipment(){
     '<thead><tr style="background:#1a1a1a;color:#fff">'+
       '<th data-w="40" style="text-align:center;background:#1a1a1a"><input type="checkbox" onchange="buildShipCheckAll(this.checked)"></th>'+
       '<th data-w="140" style="background:#1a1a1a">SKU</th>'+
+      '<th data-w="110" style="background:#1a1a1a">OD SKU</th>'+
       '<th data-w="130" style="background:#1a1a1a">ASIN</th>'+
       '<th data-w="300" style="background:#1a1a1a">Title</th>'+
       '<th data-w="100" style="background:#1a1a1a">Brand</th>'+
@@ -1899,10 +1900,11 @@ function renderBuildShipment(){
   catItems.forEach(function(r){
     var pushedQty=+r.pushedQty||0;
     var skidQty=+r.skidQty||0;
-    var totalSkids=skidQty>0?Math.ceil(pushedQty/skidQty):0;
+    var totalSkids=skidQty>0?(Math.round(pushedQty/skidQty*100)/100):0;
     html+='<tr>'+
       '<td style="text-align:center"><input type="checkbox" data-sku="'+esc(r.sku)+'" '+(window._buildChecked[r.sku]?'checked':'')+' onchange="window._buildChecked[this.dataset.sku]=this.checked"></td>'+
       '<td style="font-size:11px">'+skuLink(r.sku)+'</td>'+
+      '<td style="font-size:11px;color:#888">'+esc(r.odSku||'')+'</td>'+
       '<td style="font-size:11px">'+asinLink(r.asin)+'</td>'+
       '<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
       '<td><span class="badge badge-gray">'+esc(r.brand)+'</span></td>'+
@@ -1945,9 +1947,9 @@ function exportBuildShipment(){
   var rows=items.map(function(r){
     var pushedQty=+r.pushedQty||0;
     var skidQty=+r.skidQty||0;
-    var totalSkids=skidQty>0?Math.ceil(pushedQty/skidQty):0;
+    var totalSkids=skidQty>0?(Math.round(pushedQty/skidQty*100)/100):0;
     return{
-      'Category':r.category,'Brand':r.brand,'SKU':r.sku,'ASIN':r.asin,'Title':r.title,
+      'Category':r.category,'Brand':r.brand,'SKU':r.sku,'OD SKU':r.odSku||'','ASIN':r.asin,'Title':r.title,
       'Pushed Qty':pushedQty,
       'Qty per Skid':r.skidQty||'',
       'Total Skids':totalSkids||''
