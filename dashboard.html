@@ -790,7 +790,7 @@ async function syncToServer(dataset, data){
 async function loadAllFromServer(){
   if(!serverUrl||!serverPwd){ setSyncStatus('Not connected — enter URL & password in ⚙','err'); return; }
   setSyncStatus('Loading from server…','syncing');
-  var datasets=['mapping','od','invreport','compreport','plreport','inbound','comments'];
+  var datasets=['mapping','od','invreport','compreport','plreport','inbound','comments','buildship'];
   var loaded=0;
   for(var i=0;i<datasets.length;i++){
     var ds=datasets[i];
@@ -832,6 +832,9 @@ function applyServerData(dataset, data){
   }else if(dataset==='comments'){
     skuComments=data;
     localStorage.setItem('amz_comments',JSON.stringify(data));
+  }else if(dataset==='buildship'){
+    _buildShipment=data;
+    localStorage.setItem('build_shipment',JSON.stringify(data));
   }
 }
 
@@ -1794,6 +1797,18 @@ function shipCheckAll(checked){
   });
 }
 
+function setBuildShipTab(tab){
+  _buildShipTab=tab;
+  localStorage.setItem('build_shipment_tab', tab);
+}
+
+function saveBuildSkidQty(el){
+  if(_buildShipment[el.dataset.sku]) _buildShipment[el.dataset.sku].skidQty=el.value;
+  localStorage.setItem('build_shipment', JSON.stringify(_buildShipment));
+  syncToServer('buildship', _buildShipment);
+  renderBuildShipment();
+}
+
 function pushToShipment(){
   var shipData=computeShipmentData();
   var pushed=0;
@@ -1809,6 +1824,8 @@ function pushToShipment(){
     pushed++;
   });
   if(!pushed){ alert('No rows checked. Check the boxes on rows you want to push.'); return; }
+  localStorage.setItem('build_shipment', JSON.stringify(_buildShipment));
+  syncToServer('buildship', _buildShipment);
   // Clear selection state
   window._shipChecked={};
   window._shipQty={};
@@ -1858,7 +1875,7 @@ function renderBuildShipment(){
       var sq=+r.skidQty||0;
       return a+(sq>0?Math.ceil((+r.pushedQty||0)/sq):0);
     },0);
-    return '<button onclick="_buildShipTab=\''+esc(cat)+'\';renderBuildShipment()" style="padding:6px 14px;border-radius:8px;border:2px solid '+(active?'#1a1a1a':'#ddd')+';background:'+(active?'#1a1a1a':'#fff')+';color:'+(active?'#fff':'#333')+';cursor:pointer;font-size:13px;font-weight:'+(active?'600':'400')+'">'+
+    return '<button onclick="setBuildShipTab(\''+esc(cat)+'\');renderBuildShipment()" style="padding:6px 14px;border-radius:8px;border:2px solid '+(active?'#1a1a1a':'#ddd')+';background:'+(active?'#1a1a1a':'#fff')+';color:'+(active?'#fff':'#333')+';cursor:pointer;font-size:13px;font-weight:'+(active?'600':'400')+'">'+
       esc(cat)+' <span style="opacity:0.7">('+cats[cat].length+' SKUs'+(catSkids?' · '+catSkids+' skids':'')+')</span></button>';
   }).join('');
 
@@ -1909,7 +1926,7 @@ function renderBuildShipment(){
       '<td class="wrap-cell" style="font-size:11px" title="'+esc(r.title)+'">'+esc(r.title)+'</td>'+
       '<td><span class="badge badge-gray">'+esc(r.brand)+'</span></td>'+
       '<td class="num" style="background:#eaf3ee;font-weight:600">'+pushedQty.toLocaleString()+'</td>'+
-      '<td style="background:#eaf3ee"><input type="number" min="1" step="1" placeholder="e.g. 12" value="'+(r.skidQty||'')+'" data-sku="'+esc(r.sku)+'" style="width:80px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" onchange="_buildShipment[this.dataset.sku].skidQty=this.value;renderBuildShipment()"></td>'+
+      '<td style="background:#eaf3ee"><input type="number" min="1" step="1" placeholder="e.g. 12" value="'+(r.skidQty||'')+'" data-sku="'+esc(r.sku)+'" style="width:80px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" onchange="saveBuildSkidQty(this)"></td>'+
       '<td class="num" style="background:#eaf3ee;font-weight:600">'+(totalSkids||'—')+'</td>'+
     '</tr>';
   });
@@ -1934,7 +1951,10 @@ function clearBuildShipment(){
   Object.keys(_buildShipment).forEach(function(sku){
     if((_buildShipment[sku].category||'Uncategorized')===cat) delete _buildShipment[sku];
   });
+  localStorage.setItem('build_shipment', JSON.stringify(_buildShipment));
+  syncToServer('buildship', _buildShipment);
   _buildShipTab='';
+  localStorage.setItem('build_shipment_tab','');
   renderBuildShipment();
 }
 
@@ -2152,8 +2172,8 @@ var _shipSort={col:null,dir:1};
 var _reorderSort={col:null,dir:1};
 var _reorderQty={};      // {odSku: qty string}
 var _reorderChecked={};  // {odSku: bool}
-var _buildShipment={};   // {sku: {asin, title, category, pushedQty, freeQty}}
-var _buildShipTab='';    // currently selected category tab
+var _buildShipment=JSON.parse(localStorage.getItem('build_shipment')||'{}');
+var _buildShipTab=localStorage.getItem('build_shipment_tab')||'';
 
 function computeReorderData(){
   var invBySku={};
@@ -2551,6 +2571,7 @@ if(serverUrl && serverPwd){
           else if(id==='page-shipment') renderShipmentTable();
           else if(id==='page-reorder') renderReorderTable();
           else if(id==='page-roi') renderRoi();
+          else if(id==='page-buildship') renderBuildShipment();
         }
       }
     }catch(e){}
