@@ -800,8 +800,8 @@ async function loadAllFromServer(){
       var text=await res.text();
       var json;
       try{ json=JSON.parse(text); }catch(e){ console.warn('Non-JSON from '+url+': '+text.slice(0,100)); continue; }
-      if(json.success && json.data!==null){
-        applyServerData(ds, json.data);
+      if(json.success){
+        if(json.data!==null) applyServerData(ds, json.data);
         loaded++;
       }
     }catch(e){ console.warn('Failed to load '+ds, e.message); }
