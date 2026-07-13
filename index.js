@@ -36,11 +36,27 @@ function auth(req, res) {
 }
 
 // ── SP-API ────────────────────────────────────────────────────────────────────
-const SP_CLIENT_ID     = process.env.SP_CLIENT_ID;
-const SP_CLIENT_SECRET = process.env.SP_CLIENT_SECRET;
-const SP_REFRESH_TOKEN = process.env.SP_REFRESH_TOKEN;
-const SP_MARKETPLACE   = process.env.SP_MARKETPLACE_ID || 'ATVPDKIKX0DER';
-const SP_BASE          = 'https://sellingpartnerapi-na.amazon.com';
+let SP_CLIENT_ID     = process.env.SP_CLIENT_ID;
+let SP_CLIENT_SECRET = process.env.SP_CLIENT_SECRET;
+let SP_REFRESH_TOKEN = process.env.SP_REFRESH_TOKEN;
+const SP_MARKETPLACE = process.env.SP_MARKETPLACE_ID || 'ATVPDKIKX0DER';
+const SP_BASE        = 'https://sellingpartnerapi-na.amazon.com';
+
+// Load SP creds from DB if not in env
+async function ensureSpCreds() {
+  if (SP_CLIENT_ID && SP_CLIENT_SECRET && SP_REFRESH_TOKEN) return true;
+  try {
+    const r = await pool.query("SELECT payload FROM dashboard_data WHERE dataset='sp_creds'");
+    if (r.rows.length) {
+      const c = r.rows[0].payload;
+      SP_CLIENT_ID     = SP_CLIENT_ID     || c.clientId;
+      SP_CLIENT_SECRET = SP_CLIENT_SECRET || c.clientSecret;
+      SP_REFRESH_TOKEN = SP_REFRESH_TOKEN || c.refreshToken;
+      return !!(SP_CLIENT_ID && SP_CLIENT_SECRET && SP_REFRESH_TOKEN);
+    }
+  } catch(e) { console.error('ensureSpCreds error:', e.message); }
+  return false;
+}
 
 let _spToken = null, _spTokenExpiry = 0;
 
@@ -152,7 +168,8 @@ async function getOrders(days) {
 }
 
 async function getSkuSummary(sku, asin) {
-  if (!SP_CLIENT_ID || !SP_CLIENT_SECRET || !SP_REFRESH_TOKEN) return { error: 'SP-API credentials not configured' };
+  const ready = await ensureSpCreds();
+  if (!ready) return { error: 'SP-API credentials not configured' };
   try {
     const result = { sku, asin };
     if (asin) {
@@ -169,6 +186,21 @@ async function getSkuSummary(sku, asin) {
     return result;
   } catch(err) { return { error: err.message }; }
 }
+
+// Save SP-API credentials to DB (so they survive container restarts without env vars)
+app.post('/api/sp-creds', async (req, res) => {
+  if (!auth(req, res)) return;
+  const { clientId, clientSecret, refreshToken } = req.body;
+  if (!clientId || !clientSecret || !refreshToken) return res.status(400).json({ success:false, error:'clientId, clientSecret, refreshToken required' });
+  try {
+    await pool.query(`INSERT INTO dashboard_data (dataset, payload, updated_at) VALUES ('sp_creds', $1, NOW())
+      ON CONFLICT (dataset) DO UPDATE SET payload=$1, updated_at=NOW()`,
+      [JSON.stringify({ clientId, clientSecret, refreshToken })]);
+    SP_CLIENT_ID = clientId; SP_CLIENT_SECRET = clientSecret; SP_REFRESH_TOKEN = refreshToken;
+    _spToken = null; // reset cached token
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ success:false, error: err.message }); }
+});
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
