@@ -36,9 +36,9 @@ function auth(req, res) {
 }
 
 // ── SP-API ────────────────────────────────────────────────────────────────────
-const SP_CLIENT_ID     = process.env.SP_CLIENT_ID     || 'amzn1.application-oa2-client.53a83b4cd32148b6a0518d3ffcfb861c';
-const SP_CLIENT_SECRET = process.env.SP_CLIENT_SECRET || 'amzn1.oa2-cs.v1.65ab6278a1e39ab38b3cbd33d0feaff29ac7ba5585f62624299049bb2d7eadd2';
-const SP_REFRESH_TOKEN = process.env.SP_REFRESH_TOKEN || 'Atzr|IwEBIMFI72sbYVwsDRQ-rvflRsF8XzjkGmKsibtUMQNgblLsjBYX_QbG2TbM-veCyPqIuTkhxbrk9i43YoRYNDQ09HBAU147yTOrW6SwlCnrlvR8EKOqEahQAgKp3HClykBzIv51mWF0Rzu-7XgZYyBV-qgYfUdBr6t5snijQw_aDFmfMNLA--1TLQV-AqJ6jad1G2SgelAVIi47Pe7nB5FWeC5_AF1GHIDjmSFmrc5saWvJLu6BUfCe4r_GoLUkIrb-dcQu9A1BQteLakbAVtvdAg5snyk68Em4RVjk2pc1OMWlljie_G3xKgJoz9dhcriziqY_lrqGWLPGKs_ab7p9UyYe';
+const SP_CLIENT_ID     = process.env.SP_CLIENT_ID;
+const SP_CLIENT_SECRET = process.env.SP_CLIENT_SECRET;
+const SP_REFRESH_TOKEN = process.env.SP_REFRESH_TOKEN;
 const SP_MARKETPLACE   = process.env.SP_MARKETPLACE_ID || 'ATVPDKIKX0DER';
 const SP_BASE          = 'https://sellingpartnerapi-na.amazon.com';
 
@@ -59,19 +59,29 @@ async function getSpToken() {
 
 async function spGet(path, params = {}) {
   const token = await getSpToken();
-  const res = await axios.get(SP_BASE + path, {
-    headers: { 'x-amz-access-token': token },
-    params,
-  });
-  return res.data;
+  try {
+    const res = await axios.get(SP_BASE + path, {
+      headers: { 'x-amz-access-token': token },
+      params,
+    });
+    return res.data;
+  } catch(err) {
+    const detail = err.response?.data;
+    throw new Error((err.response?.status||'?')+': '+(detail?.errors?.[0]?.message||JSON.stringify(detail)||err.message));
+  }
 }
 
 async function spPost(path, body) {
   const token = await getSpToken();
-  const res = await axios.post(SP_BASE + path, body, {
-    headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' },
-  });
-  return res.data;
+  try {
+    const res = await axios.post(SP_BASE + path, body, {
+      headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' },
+    });
+    return res.data;
+  } catch(err) {
+    const detail = err.response?.data;
+    throw new Error((err.response?.status||'?')+': '+(detail?.errors?.[0]?.message||JSON.stringify(detail)||err.message));
+  }
 }
 
 // Simple TTL cache
@@ -94,7 +104,7 @@ async function getPrice(asin) {
 
 async function getFees(asin, price) {
   return cached('fees:'+asin+':'+Math.round(price*100), 60*MIN, async () => {
-    const data = await spPost('/products/fees/v0/items/'+asin+'/feesEstimate', {
+    const data = await spPost('/products/fees/v0/items/'+encodeURIComponent(asin)+'/feesEstimate', {
       FeesEstimateRequest: { MarketplaceId: SP_MARKETPLACE, IsAmazonFulfilled: true, Identifier: asin,
         PriceToEstimateFees: { ListingPrice: { CurrencyCode:'USD', Amount: price }, Shipping: { CurrencyCode:'USD', Amount:0 } } }
     });
@@ -110,7 +120,12 @@ async function getFees(asin, price) {
 
 async function getAllInventory() {
   return cached('inventory:all', 30*MIN, async () => {
-    const data = await spGet('/fba/inventory/v1/summaries', { marketplaceIds: SP_MARKETPLACE, details: true, granularityType: 'Marketplace', granularityId: SP_MARKETPLACE });
+    const data = await spGet('/fba/inventory/v1/summaries', {
+      marketplaceIds: SP_MARKETPLACE,
+      details: true,
+      granularityType: 'Marketplace',
+      granularityId: SP_MARKETPLACE,
+    });
     return (data?.payload?.inventorySummaries || []).map(i => ({
       sku: i.sellerSku, asin: i.asin,
       totalQty: i.inventoryDetails?.fulfillableQuantity ?? i.totalQuantity ?? 0,
