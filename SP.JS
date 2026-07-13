@@ -2,19 +2,19 @@
 // Amazon SP-API Module
 // Clean, cached, rate-limit-aware wrapper
 // ============================================================
- 
+
 const axios = require('axios');
- 
+
 const CLIENT_ID     = process.env.SP_CLIENT_ID;
 const CLIENT_SECRET = process.env.SP_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.SP_REFRESH_TOKEN;
 const MARKETPLACE   = process.env.SP_MARKETPLACE_ID || 'ATVPDKIKX0DER';
 const SP_BASE       = 'https://sellingpartnerapi-na.amazon.com';
- 
+
 // ── Token management ──────────────────────────────────────────────────────────
 let _token = null;
 let _tokenExpiry = 0;
- 
+
 async function getToken() {
   if (_token && Date.now() < _tokenExpiry) return _token;
   const res = await axios.post('https://api.amazon.com/auth/o2/token', {
@@ -27,7 +27,7 @@ async function getToken() {
   _tokenExpiry = Date.now() + (res.data.expires_in - 60) * 1000;
   return _token;
 }
- 
+
 // ── Generic SP-API request with rate-limit retry ──────────────────────────────
 async function spRequest(method, path, params = {}, body = null, retries = 3) {
   const token = await getToken();
@@ -53,10 +53,10 @@ async function spRequest(method, path, params = {}, body = null, retries = 3) {
     }
   }
 }
- 
+
 const spGet  = (path, params)       => spRequest('GET',  path, params);
 const spPost = (path, body, params) => spRequest('POST', path, params, body);
- 
+
 // ── Simple TTL cache ──────────────────────────────────────────────────────────
 const _cache = {};
 function cache(key, ttlMs, fn) {
@@ -67,9 +67,9 @@ function cache(key, ttlMs, fn) {
     return val;
   });
 }
- 
+
 const MIN = 60 * 1000;
- 
+
 // ── Pricing: current Buy Box price ───────────────────────────────────────────
 async function getPrice(asin) {
   return cache(`price:${asin}`, 15 * MIN, async () => {
@@ -82,7 +82,7 @@ async function getPrice(asin) {
     const offers  = product?.Offers || [];
     const buyBox  = offers.find(o => o.IsBuyBoxWinner)?.BuyingPrice
                  || offers[0]?.BuyingPrice;
- 
+
     return {
       asin,
       currentPrice:    buyBox?.LandedPrice?.Amount   ?? buyBox?.ListingPrice?.Amount ?? null,
@@ -93,7 +93,7 @@ async function getPrice(asin) {
     };
   });
 }
- 
+
 // ── Fees: FBA fee + referral fee estimate ────────────────────────────────────
 async function getFees(asin, price) {
   const priceKey = Math.round(price * 100); // avoid float key issues
@@ -113,11 +113,11 @@ async function getFees(asin, price) {
         },
       }
     );
- 
+
     const result     = data?.payload?.FeesEstimateResult;
     const feeList    = result?.FeesEstimate?.FeeDetailList ?? [];
     const totalFees  = result?.FeesEstimate?.TotalFeesEstimate?.Amount ?? null;
- 
+
     let fbaFee = 0, referralFee = 0;
     feeList.forEach(f => {
       if (['FBAPerUnitFulfillmentFee','FBAPerOrderFulfillmentFee','FBAWeightBasedFee'].includes(f.FeeType)) {
@@ -127,11 +127,11 @@ async function getFees(asin, price) {
         referralFee = +(f.FeeAmount?.Amount || 0);
       }
     });
- 
+
     return { asin, price, fbaFee, referralFee, totalFees };
   });
 }
- 
+
 // ── Inventory: FBA inventory levels ──────────────────────────────────────────
 async function getInventory(nextToken = null) {
   return cache(`inventory:all:${nextToken||'first'}`, 30 * MIN, async () => {
@@ -160,7 +160,7 @@ async function getInventory(nextToken = null) {
     };
   });
 }
- 
+
 async function getAllInventory() {
   const results = [];
   let nextToken = null;
@@ -173,7 +173,7 @@ async function getAllInventory() {
   } while (nextToken);
   return results;
 }
- 
+
 // ── Orders: recent orders + line items ───────────────────────────────────────
 async function getOrders(days = 30) {
   return cache(`orders:${days}d`, 60 * MIN, async () => {
@@ -184,7 +184,7 @@ async function getOrders(days = 30) {
       OrderStatuses: 'Shipped,Unshipped,PartiallyShipped,Pending',
       MaxResultsPerPage: 100,
     });
- 
+
     const orders = data?.payload?.Orders ?? [];
     const summary = {
       totalOrders: orders.length,
@@ -192,18 +192,18 @@ async function getOrders(days = 30) {
       byDay: {},
       topAsins: {},
     };
- 
+
     orders.forEach(o => {
       const day = o.PurchaseDate?.slice(0, 10);
       if (day) summary.byDay[day] = (summary.byDay[day] || 0) + 1;
       const amt = +(o.OrderTotal?.Amount || 0);
       summary.totalRevenue += amt;
     });
- 
+
     return { orders: orders.slice(0, 200), summary };
   });
 }
- 
+
 // ── SKU Summary: all data combined for tooltip ────────────────────────────────
 async function getSkuSummary(sku, asin) {
   if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
@@ -211,7 +211,7 @@ async function getSkuSummary(sku, asin) {
   }
   try {
     const result = { sku, asin };
- 
+
     // Price
     if (asin) {
       try {
@@ -219,7 +219,7 @@ async function getSkuSummary(sku, asin) {
         Object.assign(result, p);
       } catch (e) { result.priceError = e.message; }
     }
- 
+
     // Fees
     if (asin && result.currentPrice) {
       try {
@@ -229,7 +229,7 @@ async function getSkuSummary(sku, asin) {
         result.totalFees  = f.totalFees;
       } catch (e) { result.feesError = e.message; }
     }
- 
+
     // Inventory for this SKU
     try {
       const inv = await getAllInventory();
@@ -240,11 +240,11 @@ async function getSkuSummary(sku, asin) {
         result.reservedQty  = item.reservedQty;
       }
     } catch (e) { result.inventoryError = e.message; }
- 
+
     return result;
   } catch (err) {
     return { error: err.message };
   }
 }
- 
+
 module.exports = { getPrice, getFees, getInventory, getAllInventory, getOrders, getSkuSummary };
