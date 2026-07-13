@@ -61,7 +61,11 @@ async function ensureSpCreds() {
 let _spToken = null, _spTokenExpiry = 0;
 
 async function getSpToken() {
+  if (!SP_CLIENT_ID || !SP_CLIENT_SECRET || !SP_REFRESH_TOKEN) {
+    await ensureSpCreds();
+  }
   if (_spToken && Date.now() < _spTokenExpiry) return _spToken;
+  if (!SP_CLIENT_ID || !SP_CLIENT_SECRET || !SP_REFRESH_TOKEN) throw new Error('SP-API credentials not configured');
   const res = await axios.post('https://api.amazon.com/auth/o2/token', {
     grant_type: 'refresh_token',
     refresh_token: SP_REFRESH_TOKEN,
