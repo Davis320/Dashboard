@@ -160,6 +160,17 @@ async function getSkuSummary(sku, asin) {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 app.get('/api/health', (req, res) => res.json({ status:'ok', service:'Store Health Tracker API', pwd_configured:true }));
 
+app.get('/api/debug-env', (req, res) => {
+  res.json({
+    SP_CLIENT_ID_SET: !!process.env.SP_CLIENT_ID,
+    SP_CLIENT_ID_LEN: (process.env.SP_CLIENT_ID||'').length,
+    SP_SECRET_SET: !!process.env.SP_CLIENT_SECRET,
+    SP_TOKEN_SET: !!process.env.SP_REFRESH_TOKEN,
+    DASHBOARD_PWD_SET: !!process.env.DASHBOARD_PASSWORD,
+    all_sp_keys: Object.keys(process.env).filter(k=>k.startsWith('SP')),
+  });
+});
+
 // SP-API routes
 app.get('/sp/price',       async (req,res) => { if(!auth(req,res))return; try{ res.json({success:true,data:await getPrice(req.query.asin)}); }catch(e){res.status(500).json({success:false,error:e.message});} });
 app.get('/sp/fees',        async (req,res) => { if(!auth(req,res))return; try{ res.json({success:true,data:await getFees(req.query.asin,+req.query.price)}); }catch(e){res.status(500).json({success:false,error:e.message});} });
@@ -211,4 +222,3 @@ app.listen(PORT, () => {
     dataset TEXT PRIMARY KEY, payload JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW()
   )`).then(() => console.log('DB ready')).catch(err => console.error('DB init error:', err.message));
 });
-
