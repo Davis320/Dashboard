@@ -83,7 +83,8 @@ async function spGet(path, params = {}) {
     return res.data;
   } catch(err) {
     const detail = err.response?.data;
-    throw new Error((err.response?.status||'?')+': '+(detail?.errors?.[0]?.message||JSON.stringify(detail)||err.message));
+    const msg = JSON.stringify(detail) || err.message;
+    throw new Error(msg);
   }
 }
 
