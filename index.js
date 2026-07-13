@@ -36,9 +36,9 @@ function auth(req, res) {
 }
 
 // ── SP-API ────────────────────────────────────────────────────────────────────
-const SP_CLIENT_ID     = process.env.SP_CLIENT_ID;
-const SP_CLIENT_SECRET = process.env.SP_CLIENT_SECRET;
-const SP_REFRESH_TOKEN = process.env.SP_REFRESH_TOKEN;
+const SP_CLIENT_ID     = process.env.SP_CLIENT_ID     || 'amzn1.application-oa2-client.53a83b4cd32148b6a0518d3ffcfb861c';
+const SP_CLIENT_SECRET = process.env.SP_CLIENT_SECRET || 'amzn1.oa2-cs.v1.65ab6278a1e39ab38b3cbd33d0feaff29ac7ba5585f62624299049bb2d7eadd2';
+const SP_REFRESH_TOKEN = process.env.SP_REFRESH_TOKEN || 'Atzr|IwEBIMFI72sbYVwsDRQ-rvflRsF8XzjkGmKsibtUMQNgblLsjBYX_QbG2TbM-veCyPqIuTkhxbrk9i43YoRYNDQ09HBAU147yTOrW6SwlCnrlvR8EKOqEahQAgKp3HClykBzIv51mWF0Rzu-7XgZYyBV-qgYfUdBr6t5snijQw_aDFmfMNLA--1TLQV-AqJ6jad1G2SgelAVIi47Pe7nB5FWeC5_AF1GHIDjmSFmrc5saWvJLu6BUfCe4r_GoLUkIrb-dcQu9A1BQteLakbAVtvdAg5snyk68Em4RVjk2pc1OMWlljie_G3xKgJoz9dhcriziqY_lrqGWLPGKs_ab7p9UyYe';
 const SP_MARKETPLACE   = process.env.SP_MARKETPLACE_ID || 'ATVPDKIKX0DER';
 const SP_BASE          = 'https://sellingpartnerapi-na.amazon.com';
 
