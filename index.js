@@ -2,62 +2,70 @@ const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
 const { Pool } = require('pg');
-
+const sp      = require('./sp');
+ 
 const app  = express();
 const PORT = process.env.PORT || 3000;
-
+ 
 app.use(cors({ origin: '*', methods: ['GET','POST','OPTIONS'], allowedHeaders: '*' }));
 app.options('*', cors());
 app.use(express.json({ limit: '50mb' }));
-
-// ── Database ──────────────────────────────────────────────────────────────────
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-const pool = new Pool({
-  host: 'thomas.proxy.rlwy.net',
-  port: 59087,
-  database: 'railway',
-  user: 'postgres',
-  password: 'KRiYmNDcTrqeRpWNYSRgCmwPNkqtFxku',
+ 
+// ── SP-API routes ─────────────────────────────────────────────────────────────
+ 
+// GET /sp/price?asin=B001234&pwd=...
+app.get('/sp/price', async (req, res) => {
+  if (!auth(req, res)) return;
+  const { asin } = req.query;
+  if (!asin) return res.status(400).json({ success: false, error: 'asin required' });
+  try {
+    const data = await sp.getPrice(asin);
+    res.json({ success: true, data });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
-
-app.listen(PORT, () => {
-  console.log(`Dashboard API running on port ${PORT}`);
-  // Init DB after server is listening
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS dashboard_data (
-      dataset    TEXT PRIMARY KEY,
-      payload    JSONB        NOT NULL,
-      updated_at TIMESTAMPTZ  DEFAULT NOW()
-    )
-  `).then(() => console.log('DB ready'))
-    .catch(err => console.error('DB init error:', err.message, err.code));
+ 
+// GET /sp/fees?asin=B001234&price=14.99&pwd=...
+app.get('/sp/fees', async (req, res) => {
+  if (!auth(req, res)) return;
+  const { asin, price } = req.query;
+  if (!asin || !price) return res.status(400).json({ success: false, error: 'asin and price required' });
+  try {
+    const data = await sp.getFees(asin, +price);
+    res.json({ success: true, data });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
-const VALID_DATASETS = ['mapping','od','invreport','compreport','plreport','inbound','comments','buildship'];
-const FALLBACK_PASSWORD = 'Goodmorning2';
-
-function auth(req, res) {
-  const pwd = process.env.DASHBOARD_PASSWORD || FALLBACK_PASSWORD;
-  const sent = req.headers['x-dashboard-password'] || req.query.pwd || '';
-  if (sent !== pwd) {
-    res.status(401).json({ success:false, error:'Invalid password' });
-    return false;
-  }
-  return true;
-}
-
-// ── Routes ────────────────────────────────────────────────────────────────────
-
-// Serve dashboard HTML at root
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dashboard.html'));
+ 
+// GET /sp/inventory?pwd=...  — all FBA inventory
+app.get('/sp/inventory', async (req, res) => {
+  if (!auth(req, res)) return;
+  try {
+    const items = await sp.getAllInventory();
+    res.json({ success: true, count: items.length, items });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'Store Health Tracker API', pwd_configured: true });
+ 
+// GET /sp/orders?days=30&pwd=...
+app.get('/sp/orders', async (req, res) => {
+  if (!auth(req, res)) return;
+  const days = Math.min(+(req.query.days || 30), 180);
+  try {
+    const data = await sp.getOrders(days);
+    res.json({ success: true, ...data });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
-
-// Temp debug
+ 
+// GET /sp/sku-summary?sku=XX&asin=B0...&pwd=...  — combined for tooltip
+app.get('/sp/sku-summary', async (req, res) => {
+  if (!auth(req, res)) return;
+  const { sku, asin } = req.query;
+  if (!sku && !asin) return res.status(400).json({ success: false, error: 'sku or asin required' });
+  try {
+    const data = await sp.getSkuSummary(sku, asin);
+    res.json({ success: true, data });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+ 
+ 
 app.get("/api/debug-headers", (req, res) => { res.json({ headers: req.headers }); });
 app.get("/api/debug-db", async (req, res) => {
   try {
@@ -67,7 +75,7 @@ app.get("/api/debug-db", async (req, res) => {
     res.json({ success: false, error: err.message, code: err.code, detail: err.detail, hint: err.hint });
   }
 });
-
+ 
 // List all datasets + last updated times
 app.get('/api/data', async (req, res) => {
   if (!auth(req, res)) return;
@@ -81,7 +89,7 @@ app.get('/api/data', async (req, res) => {
     res.status(500).json({ success: false, error: String(err), code: err.code, detail: err.detail });
   }
 });
-
+ 
 // GET a dataset
 app.get('/api/data/:dataset', async (req, res) => {
   if (!auth(req, res)) return;
@@ -95,7 +103,7 @@ app.get('/api/data/:dataset', async (req, res) => {
     res.status(500).json({ success:false, error:err.message });
   }
 });
-
+ 
 // POST (save/overwrite) a dataset
 app.post('/api/data/:dataset', async (req, res) => {
   if (!auth(req, res)) return;

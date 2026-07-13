@@ -46,6 +46,15 @@ h1{font-size:16px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
 .comment-btn:hover{opacity:1}
 .comment-text{font-size:11px;color:#aaa;font-style:italic;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .comment-popup{position:fixed;z-index:500;background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,0.14);width:290px}
+.sku-tooltip{position:fixed;z-index:600;background:#1a1a1a;color:#fff;border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.25);width:230px;font-size:12px;pointer-events:none;display:none}
+.sku-tooltip .tt-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.08)}
+.sku-tooltip .tt-row:last-child{border:none}
+.sku-tooltip .tt-label{color:#aaa}
+.sku-tooltip .tt-val{font-weight:600;font-variant-numeric:tabular-nums}
+.sku-tooltip .tt-divider{border-top:1px solid rgba(255,255,255,0.2);margin:6px 0}
+.sku-tooltip .tt-title{font-size:11px;color:#888;margin-bottom:6px;font-weight:500}
+.sku-tooltip .tt-loading{color:#aaa;text-align:center;padding:8px 0}
+.sku-tooltip .tt-gp{color:#4cd964;font-size:14px;font-weight:700}
 .comment-popup textarea{width:100%;height:80px;border:1px solid #ddd;border-radius:7px;padding:7px;font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;outline:none}
 .comment-popup textarea:focus{border-color:#185FA5}
 .comment-popup-btns{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
@@ -469,6 +478,9 @@ tr:hover td:first-child{background:#f7f7f5!important}
   </div>
 </div>
 
+<!-- SKU hover tooltip -->
+<div id="sku-tooltip" class="sku-tooltip"></div>
+
 <!-- Comment popup -->
 <div id="comment-popup" class="comment-popup" style="display:none">
   <div style="font-size:12px;font-weight:600;margin-bottom:6px">💬 Comment — <span id="comment-popup-sku" style="color:#888"></span></div>
@@ -546,7 +558,94 @@ function sc(col,s,fn){ return 'style="cursor:pointer;user-select:none" onclick="
 
 function skuLink(sku){
   if(!sku) return '—';
-  return '<a href="https://sellercentral.amazon.com/skucentral?mSku='+encodeURIComponent(sku)+'" target="_blank" style="color:#185FA5;text-decoration:none;font-weight:500" title="Open in Seller Central">'+esc(sku)+'</a>';
+  return '<a href="https://sellercentral.amazon.com/skucentral?mSku='+encodeURIComponent(sku)+'" target="_blank" style="color:#185FA5;text-decoration:none;font-weight:500" title="Open in Seller Central" onmouseenter="skuTipShow(this,\''+esc(sku)+'\')" onmouseleave="skuTipHide()">'+esc(sku)+'</a>';
+}
+
+// ── SKU Hover Tooltip ──
+var _skuTipTimer=null;
+var _skuTipCache={};
+
+function skuTipShow(el, sku){
+  clearTimeout(_skuTipTimer);
+  _skuTipTimer=setTimeout(function(){
+    var tip=document.getElementById('sku-tooltip');
+    var rect=el.getBoundingClientRect();
+    // Position tooltip
+    var left=rect.left;
+    var top=rect.bottom+6+window.scrollY;
+    if(left+240>window.innerWidth) left=window.innerWidth-244;
+    if(rect.bottom+200>window.innerHeight) top=rect.top-200+window.scrollY;
+    tip.style.left=left+'px';
+    tip.style.top=top+'px';
+    tip.style.display='block';
+    tip.innerHTML='<div class="tt-title">'+esc(sku)+'</div><div class="tt-loading">Loading...</div>';
+
+    // Get OD cost from odData
+    var plBySku={};
+    plReportData.forEach(function(r){ plBySku[r.sku]=r; });
+    var odBySku={};
+    var mapping=mappingData.find(function(m){ return m.sku===sku; });
+    var odSku=mapping?mapping.odSku:'';
+    var asin=mapping?mapping.asin:'';
+    odData.forEach(function(r){ odBySku[r.sku]=r; });
+    var od=odSku?odBySku[odSku]:{};
+    var odCost=+(od.avgCost||0);
+    var pl=plBySku[sku]||{};
+    var plCost=+(pl.cost||0);
+
+    // Show what we have locally while fetching
+    function renderTip(data){
+      var price=data&&data.currentPrice!=null?'$'+data.currentPrice.toFixed(2):null;
+      var fbaFee=data&&data.fbaFee!=null?'$'+data.fbaFee.toFixed(2):null;
+      var refFee=data&&data.referralFee!=null?'$'+data.referralFee.toFixed(2):null;
+      var cost=odCost>0?odCost:plCost;
+      var totalFees=(data&&data.fbaFee||0)+(data&&data.referralFee||0);
+      var gp=price&&cost?(parseFloat(data.currentPrice)-cost-totalFees):null;
+      var gpPct=gp!=null&&cost>0?(gp/(parseFloat(data.currentPrice))*100):null;
+
+      var html='<div class="tt-title">'+esc(sku)+'</div>';
+      if(price) html+='<div class="tt-row"><span class="tt-label">Current Price</span><span class="tt-val">'+price+'</span></div>';
+      if(cost>0) html+='<div class="tt-row"><span class="tt-label">OD Avg Cost</span><span class="tt-val">$'+cost.toFixed(2)+'</span></div>';
+      if(fbaFee) html+='<div class="tt-row"><span class="tt-label">FBA Fee</span><span class="tt-val">'+fbaFee+'</span></div>';
+      if(refFee) html+='<div class="tt-row"><span class="tt-label">Referral Fee</span><span class="tt-val">'+refFee+'</span></div>';
+      if(gp!=null){
+        html+='<div class="tt-divider"></div>';
+        html+='<div class="tt-row"><span class="tt-label">Gross Profit</span><span class="tt-val tt-gp">'+(gp>=0?'+':'')+'$'+gp.toFixed(2)+'</span></div>';
+        if(gpPct!=null) html+='<div class="tt-row"><span class="tt-label">GP %</span><span class="tt-val tt-gp">'+gpPct.toFixed(1)+'%</span></div>';
+      }
+      if(!price&&!fbaFee) html+='<div style="color:#aaa;font-size:11px;padding:4px 0">'+(serverUrl?'SP-API not configured':'Connect server for live pricing')+'</div>';
+      tip.innerHTML=html;
+    }
+
+    // Check cache first
+    var cacheKey=asin||sku;
+    if(_skuTipCache[cacheKey]){
+      renderTip(_skuTipCache[cacheKey]);
+      return;
+    }
+
+    // Show local data immediately
+    renderTip(null);
+
+    // Fetch from backend if connected
+    if(!serverUrl||!serverPwd||!asin){ return; }
+    var url=serverUrl.replace(/\/+$/,'')+'/sp/sku-summary?sku='+encodeURIComponent(sku)+'&asin='+encodeURIComponent(asin)+'&pwd='+encodeURIComponent(serverPwd);
+    fetch(url).then(function(r){ return r.json(); }).then(function(json){
+      if(json.success){
+        _skuTipCache[cacheKey]=json.data;
+        if(document.getElementById('sku-tooltip').style.display!=='none'){
+          renderTip(json.data);
+        }
+      }
+    }).catch(function(){});
+  }, 500);
+}
+
+function skuTipHide(){
+  clearTimeout(_skuTipTimer);
+  setTimeout(function(){
+    document.getElementById('sku-tooltip').style.display='none';
+  }, 200);
 }
 function asinLink(asin){
   if(!asin) return '—';
