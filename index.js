@@ -111,10 +111,32 @@ const MIN = 60000;
 
 async function getPrice(asin) {
   return cached('price:'+asin, 15*MIN, async () => {
-    const data = await spGet('/products/pricing/v0/price', { MarketplaceId: SP_MARKETPLACE, Asins: asin, ItemType: 'Asin' });
-    const offers = data?.payload?.[0]?.Product?.Offers || [];
-    const bb = offers.find(o => o.IsBuyBoxWinner)?.BuyingPrice || offers[0]?.BuyingPrice;
-    return { asin, currentPrice: bb?.LandedPrice?.Amount ?? bb?.ListingPrice?.Amount ?? null, listingPrice: bb?.ListingPrice?.Amount ?? null, offerCount: offers.length };
+    // Try competitive pricing first
+    try {
+      const data = await spGet('/products/pricing/v0/competitivePrice', {
+        MarketplaceId: SP_MARKETPLACE,
+        Asins: asin,
+        ItemType: 'Asin',
+      });
+      const product = data?.payload?.[0]?.Product;
+      const cp = product?.CompetitivePricing?.CompetitivePrices?.find(p => p.condition === 'New' && p.belongsToRequester === false)
+               || product?.CompetitivePricing?.CompetitivePrices?.[0];
+      const price = cp?.Price?.LandedPrice?.Amount || cp?.Price?.ListingPrice?.Amount || null;
+      return { asin, currentPrice: price, offerCount: product?.CompetitivePricing?.NumberOfOfferListings?.[0]?.Count || 0 };
+    } catch(e1) {
+      // Fallback: item offers
+      try {
+        const data = await spGet('/products/pricing/v0/items/'+encodeURIComponent(asin)+'/offers', {
+          MarketplaceId: SP_MARKETPLACE,
+          ItemCondition: 'New',
+        });
+        const offers = data?.payload?.Offers || [];
+        const bb = offers.find(o => o.IsBuyBoxWinner)?.ListingPrice || offers[0]?.ListingPrice;
+        return { asin, currentPrice: bb?.Amount || null, offerCount: offers.length };
+      } catch(e2) {
+        throw new Error('price: '+e1.message+' | '+e2.message);
+      }
+    }
   });
 }
 
@@ -136,13 +158,18 @@ async function getFees(asin, price) {
 
 async function getAllInventory() {
   return cached('inventory:all', 30*MIN, async () => {
-    const data = await spGet('/fba/inventory/v1/summaries', {
-      marketplaceIds: SP_MARKETPLACE,
-      details: true,
-      granularityType: 'Marketplace',
-      granularityId: SP_MARKETPLACE,
+    // marketplaceIds must be passed as repeated params for some SP-API versions
+    const token = await getSpToken();
+    const res = await axios.get(SP_BASE + '/fba/inventory/v1/summaries', {
+      headers: { 'x-amz-access-token': token },
+      params: new URLSearchParams([
+        ['granularityType', 'Marketplace'],
+        ['granularityId', SP_MARKETPLACE],
+        ['marketplaceIds', SP_MARKETPLACE],
+        ['details', 'true'],
+      ]),
     });
-    return (data?.payload?.inventorySummaries || []).map(i => ({
+    return (res.data?.payload?.inventorySummaries || []).map(i => ({
       sku: i.sellerSku, asin: i.asin,
       totalQty: i.inventoryDetails?.fulfillableQuantity ?? i.totalQuantity ?? 0,
       inboundQty: (i.inventoryDetails?.inboundShippingQuantity||0)+(i.inventoryDetails?.inboundReceivingQuantity||0),
