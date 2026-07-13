@@ -247,6 +247,18 @@ app.get('/api/debug-env', (req, res) => {
 });
 
 // SP-API routes
+app.get('/sp/test', async (req, res) => {
+  try {
+    const token = await getSpToken();
+    const result = await axios.get(SP_BASE + '/products/pricing/v0/price', {
+      headers: { 'x-amz-access-token': token },
+      params: { MarketplaceId: SP_MARKETPLACE, Asins: req.query.asin || 'B0071N5DM4', ItemType: 'Asin' },
+    });
+    res.json({ success: true, data: result.data });
+  } catch(err) {
+    res.json({ success: false, status: err.response?.status, error: err.response?.data || err.message });
+  }
+});
 app.get('/sp/price',       async (req,res) => { if(!auth(req,res))return; try{ res.json({success:true,data:await getPrice(req.query.asin)}); }catch(e){res.status(500).json({success:false,error:e.message});} });
 app.get('/sp/fees',        async (req,res) => { if(!auth(req,res))return; try{ res.json({success:true,data:await getFees(req.query.asin,+req.query.price)}); }catch(e){res.status(500).json({success:false,error:e.message});} });
 app.get('/sp/inventory',   async (req,res) => { if(!auth(req,res))return; try{ const i=await getAllInventory(); res.json({success:true,count:i.length,items:i}); }catch(e){res.status(500).json({success:false,error:e.message});} });
