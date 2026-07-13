@@ -371,3 +371,15 @@ app.post('/api/data/:dataset', async (req, res) => {
     res.status(500).json({ success:false, error:err.message });
   }
 });
+
+app.listen(PORT, () => {
+  console.log(`Store Health Tracker API running on port ${PORT}`);
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS dashboard_data (
+      dataset    TEXT PRIMARY KEY,
+      payload    JSONB        NOT NULL,
+      updated_at TIMESTAMPTZ  DEFAULT NOW()
+    )
+  `).then(() => console.log('DB ready'))
+    .catch(err => console.error('DB init error:', err.message, err.code));
+});
