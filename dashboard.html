@@ -1995,11 +1995,21 @@ function exportReorderOrder(){
   renderReorderTable();
 }
 
+function saveShipCheck(el){
+  window._shipChecked[el.dataset.sku]=el.checked;
+  localStorage.setItem('ship_checked',JSON.stringify(window._shipChecked));
+}
+function saveShipQty(el){
+  window._shipQty[el.dataset.sku]=el.value;
+  localStorage.setItem('ship_qty',JSON.stringify(window._shipQty));
+}
+
 function shipCheckAll(checked){
   document.querySelectorAll('#ship-body input[type=checkbox]').forEach(function(cb){
     cb.checked=checked;
     window._shipChecked[cb.dataset.sku]=checked;
   });
+  localStorage.setItem('ship_checked',JSON.stringify(window._shipChecked));
 }
 
 function setBuildShipTab(tab){
@@ -2034,6 +2044,8 @@ function pushToShipment(){
   // Clear selection state
   window._shipChecked={};
   window._shipQty={};
+  localStorage.removeItem('ship_checked');
+  localStorage.removeItem('ship_qty');
   renderShipmentTable();
   renderBuildShipment();
   // Switch to Build Shipment tab
@@ -2251,8 +2263,8 @@ function renderShipmentTable(){
 
   var ss=_shipSort;
   // Init ship select/qty state
-  if(!window._shipChecked) window._shipChecked={};
-  if(!window._shipQty) window._shipQty={};
+  if(!window._shipChecked) window._shipChecked=JSON.parse(localStorage.getItem('ship_checked')||'{}');
+  if(!window._shipQty) window._shipQty=JSON.parse(localStorage.getItem('ship_qty')||'{}');
 
   var T='shipment';
   function sth(label,col,cls,style){ return thIf(T,label,'<th '+(cls?'class="'+cls+'" ':'')+sc(col,ss,'ship')+(style?' style="cursor:pointer;user-select:none;'+style+'"':' style="cursor:pointer;user-select:none"')+'>'+label+sa(col,ss)+'</th>'); }
@@ -2284,7 +2296,7 @@ function renderShipmentTable(){
     var received=receivedSet.has(r.odSku);
     var isPushed=!!_buildShipment[r.sku];
     return '<tr'+(dupAsin?' style="background:#fff0f0"':isPushed?' style="background:#eaf3de"':'')+'>'+
-      tdIf(T,'Select','<td style="text-align:center"><input type="checkbox" data-sku="'+esc(r.sku)+'" '+(window._shipChecked[r.sku]?'checked':'')+' onchange="window._shipChecked[this.dataset.sku]=this.checked"></td>')+
+      tdIf(T,'Select','<td style="text-align:center"><input type="checkbox" data-sku="'+esc(r.sku)+'" '+(window._shipChecked[r.sku]?'checked':'')+' onchange="saveShipCheck(this)"></td>')+
       tdIf(T,'ASIN','<td style="font-size:11px">'+asinLink(r.asin)+'</td>')+
       tdIf(T,'SKU','<td style="font-size:12px;font-weight:600;'+(dupAsin?'color:#C00000':'')+'">'+skuLink(r.sku)+'</td>')+
       tdIf(T,'Brand','<td><span class="badge badge-gray">'+esc(brand)+'</span></td>')+
@@ -2303,7 +2315,7 @@ function renderShipmentTable(){
       tdIf(T,'Amazon Eaches','<td class="num">'+(r.amazonEaches||0).toLocaleString()+'</td>')+
       tdIf(T,'OD Unit Qty','<td class="num">'+(r.odUnitQty||0).toLocaleString()+'</td>')+
       tdIf(T,'Received Wk','<td style="text-align:center;font-size:14px">'+(received?'<span style="color:#1D6335;font-weight:700">✓</span>':'')+'</td>')+
-      tdIf(T,'Ship Qty','<td style="background:#eaf3ee"><input type="number" min="0" placeholder="0" value="'+(window._shipQty[r.sku]||'')+'" data-sku="'+esc(r.sku)+'" style="width:70px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" oninput="window._shipQty[this.dataset.sku]=this.value"></td>')+
+      tdIf(T,'Ship Qty','<td style="background:#eaf3ee"><input type="number" min="0" placeholder="0" value="'+(window._shipQty[r.sku]||'')+'" data-sku="'+esc(r.sku)+'" style="width:70px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" oninput="saveShipQty(this)"></td>')+
       (colVisible(T,'Comment')?commentCell(r.sku):'')+
     '</tr>';
   }).join('');
