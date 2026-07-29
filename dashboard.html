@@ -1963,6 +1963,7 @@ function reorderCheckAll(checked){
     var odsku=cb.dataset.odsku;
     if(odsku) _reorderChecked[odsku]=checked;
   });
+  localStorage.setItem('reorder_checked',JSON.stringify(_reorderChecked));
 }
 
 function exportReorderOrder(){
@@ -1992,6 +1993,8 @@ function exportReorderOrder(){
   // Clear qty and checkboxes after export
   _reorderQty={};
   _reorderChecked={};
+  localStorage.removeItem('reorder_qty');
+  localStorage.removeItem('reorder_checked');
   renderReorderTable();
 }
 
@@ -2002,6 +2005,14 @@ function saveShipCheck(el){
 function saveShipQty(el){
   window._shipQty[el.dataset.sku]=el.value;
   localStorage.setItem('ship_qty',JSON.stringify(window._shipQty));
+}
+function saveReorderCheck(el){
+  _reorderChecked[el.dataset.odsku]=el.checked;
+  localStorage.setItem('reorder_checked',JSON.stringify(_reorderChecked));
+}
+function saveReorderQty(el){
+  _reorderQty[el.dataset.amzsku]=el.value;
+  localStorage.setItem('reorder_qty',JSON.stringify(_reorderQty));
 }
 
 function shipCheckAll(checked){
@@ -2387,8 +2398,8 @@ function exportShipment(){
 var reorderPage=0;
 var _shipSort={col:null,dir:1};
 var _reorderSort={col:null,dir:1};
-var _reorderQty={};      // {odSku: qty string}
-var _reorderChecked={};  // {odSku: bool}
+var _reorderQty=JSON.parse(localStorage.getItem('reorder_qty')||'{}');
+var _reorderChecked=JSON.parse(localStorage.getItem('reorder_checked')||'{}');
 var _buildShipment=JSON.parse(localStorage.getItem('build_shipment')||'{}');
 var _buildShipTab=localStorage.getItem('build_shipment_tab')||'';
 
@@ -2605,7 +2616,7 @@ function renderReorderTable(){
       rows+='<tr>';
       if(i===0){
         rows+=
-          (colVisible(R,'Select')?'<td rowspan="'+span+'" style="text-align:center;vertical-align:middle"><input type="checkbox" data-odsku="'+esc(g.odSku)+'" '+(!!_reorderChecked[g.odSku]?'checked':'')+' onchange="_reorderChecked[this.dataset.odsku]=this.checked"></td>':'')+
+          (colVisible(R,'Select')?'<td rowspan="'+span+'" style="text-align:center;vertical-align:middle"><input type="checkbox" data-odsku="'+esc(g.odSku)+'" '+(!!_reorderChecked[g.odSku]?'checked':'')+' onchange="saveReorderCheck(this)"></td>':'')+
           (colVisible(R,'OD SKU')?'<td rowspan="'+span+'" style="font-weight:600;font-size:12px;vertical-align:middle">'+esc(g.odSku)+'</td>':'')+
           (colVisible(R,'Brand')?'<td rowspan="'+span+'" style="vertical-align:middle"><span class="badge badge-gray">'+esc(g.brand)+'</span></td>':'')+
           (colVisible(R,'Case Qty')?'<td rowspan="'+span+'" class="num" style="vertical-align:middle">'+g.caseQty+'</td>':'');
@@ -2633,7 +2644,7 @@ function renderReorderTable(){
         tdIf(R,'Sales Qty (OD)','<td class="num" style="background:#fff2cc">'+(r.salesQtyOd||0).toLocaleString()+'</td>')+
         tdIf(R,'Profit','<td class="num" style="background:#fff2cc">'+(r.profit?'$'+r.profit.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>')+
         tdIf(R,'Margin','<td class="num" style="background:#fff2cc">'+(r.margin?(r.margin*100).toFixed(1)+'%':'—')+'</td>');
-      rows+=(colVisible(R,'Order Qty')?'<td style="background:#fff8e8"><input type="number" min="0" placeholder="0" value="'+(_reorderQty[r.amzSku]||'')+'" style="width:80px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" data-amzsku="'+esc(r.amzSku)+'" oninput="_reorderQty[this.dataset.amzsku]=this.value"></td>':'')+
+      rows+=(colVisible(R,'Order Qty')?'<td style="background:#fff8e8"><input type="number" min="0" placeholder="0" value="'+(_reorderQty[r.amzSku]||'')+'" style="width:80px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right" data-amzsku="'+esc(r.amzSku)+'" oninput="saveReorderQty(this)"></td>':'')+
       (colVisible(R,'Comment')?commentCell(r.amzSku):'')+
       '</tr>';
     });
