@@ -2446,7 +2446,7 @@ function computeReorderData(){
       odPurchasePrice:+(od.purchasePrice||0), odAvgCost:+(od.avgCost||0),
       salesQty:salesQty, salesQtyOd:salesQtyOd, profit:profit, margin:margin
     };
-  }).filter(function(r){ return r.amzSku&&(r.amzTotal>0||r.salesQty>0||r.odAvail>0); });
+  }).filter(function(r){ return r.amzSku; });
 
   // Group by OD SKU
   var groups={};
