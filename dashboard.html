@@ -667,7 +667,21 @@ function msInit(id, values, label){
   var dd=document.getElementById(id+'-dd');
   dd.innerHTML='<div class="ms-option ms-all"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-all-'+id+'" '+(allOn?'checked':'')+' onchange="msAll(\''+id+'\',this.checked)"> All</label></div>';
   values.forEach(function(v){
-    dd.innerHTML+='<div class="ms-option"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" value="'+esc(v)+'" '+(allOn||sel.has(v)?'checked':'')+' onchange="msPick(\''+id+'\',\''+esc(v)+'\',this.checked)"> '+esc(v)+'</label></div>';
+    var checked=allOn||sel.has(v);
+    var opt=document.createElement('div');
+    opt.className='ms-option';
+    var lbl=document.createElement('label');
+    lbl.style.cssText='display:flex;align-items:center;gap:8px';
+    var cb=document.createElement('input');
+    cb.type='checkbox';
+    cb.checked=checked;
+    cb.dataset.msid=id;
+    cb.dataset.val=v;
+    cb.addEventListener('change',function(){ msPick(this.dataset.msid, this.dataset.val, this.checked); });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(v));
+    opt.appendChild(lbl);
+    dd.appendChild(opt);
   });
 }
 
